@@ -1,0 +1,55 @@
+// Educational agent workflow (after education_agent_fsm_guide.pdf).
+// A Teacher Agent designs the curriculum and grades, a Student Agent learns,
+// and a human instructor approves every plan and handles escalations.
+// The guide's Python runtime allows max_failures = 2 graded failures per
+// lesson: that budget is unrolled into the states (suffix = failures so far).
+// As in the Python code, passing a lesson goes back to curriculum design, so
+// the next concept is planned and approved again.
+// Note: the guide's Python sends HUMAN_REJECT but checks for HUMAN_REJECTED,
+// so a rejected plan would leave it stuck in PLAN_VERIFICATION.
+diagram EducationalAgentWorkflow
+
+attributes {
+  phase : { curriculum_design, plan_verification, content_delivery, student_engage, automated_grading, human_intervene };
+  consecutive_failures : 0..3;   // the domain allows 3; the invariant proves it never gets there
+  remediation : boolean;         // simplified re-teaching after a failure
+}
+
+initial state curriculum_design "teacher drafts syllabus" { phase = curriculum_design, consecutive_failures = 0, remediation = FALSE } at (80, 220)
+state plan_verification "human approves plan?" { phase = plan_verification, consecutive_failures = 0, remediation = FALSE } at (300, 80)
+state delivery0 "lesson" { phase = content_delivery, consecutive_failures = 0, remediation = FALSE } at (540, 80)
+state engage0 "student works" { phase = student_engage, consecutive_failures = 0, remediation = FALSE } at (760, 80)
+state grading0 "grading" { phase = automated_grading, consecutive_failures = 0, remediation = FALSE } at (760, 260)
+state delivery1 "remedial lesson" { phase = content_delivery, consecutive_failures = 1, remediation = TRUE } at (760, 440)
+state engage1 "student retries" { phase = student_engage, consecutive_failures = 1, remediation = TRUE } at (540, 440)
+state grading1 "grading retry" { phase = automated_grading, consecutive_failures = 1, remediation = TRUE } at (300, 440)
+state human_intervene "instructor steps in" { phase = human_intervene, consecutive_failures = 2, remediation = FALSE } at (80, 440)
+
+curriculum_design -> plan_verification : "PLAN_GENERATED";
+plan_verification -> delivery0 : "HUMAN_APPROVED";
+plan_verification -> curriculum_design : "HUMAN_REJECTED";
+delivery0 -> engage0 : "LESSON_READY";
+engage0 -> grading0 : "STUDENT_SUBMITTED";
+grading0 -> curriculum_design : "PASSED: next concept";
+grading0 -> delivery1 : "FAILED (1 of 2)";
+delivery1 -> engage1 : "LESSON_READY";
+engage1 -> grading1 : "STUDENT_SUBMITTED";
+grading1 -> curriculum_design : "PASSED: next concept";
+grading1 -> human_intervene : "FAILED (2 of 2)";
+human_intervene -> curriculum_design : "TEACHER_RESET";
+human_intervene -> delivery0 : "manual override";
+
+// 1. Safety: no content reaches the student before a human has verified a plan.
+LTLSPEC NAME content_needs_approval := G (phase = content_delivery -> O phase = plan_verification);
+// 1b. Stronger: since the last redesign, a human approved the plan (or overrode it).
+LTLSPEC NAME approved_since_redesign := G (phase = content_delivery -> (phase != curriculum_design S (phase = plan_verification | phase = human_intervene)));
+// 2. Loop protection: the failure budget is never exceeded ...
+INVARSPEC NAME failure_budget := consecutive_failures <= 2;
+// ... and every grading leads to the next concept or to the instructor.
+LTLSPEC NAME no_endless_failure_loop := G (phase = automated_grading -> F (phase = curriculum_design | phase = human_intervene));
+// Remediation only ever follows a failed grading.
+LTLSPEC NAME remediation_after_failure := G (remediation & phase = content_delivery -> Y phase = automated_grading);
+// 3. Escalation to the instructor is always possible.
+CTLSPEC NAME human_reachable := AG EF phase = human_intervene;
+// Not guaranteed: the instructor may reject every plan, so the student never gets a lesson.
+LTLSPEC NAME always_taught := G (phase = curriculum_design -> F phase = content_delivery);
