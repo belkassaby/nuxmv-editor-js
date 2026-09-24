@@ -1,0 +1,60 @@
+<dialog #dialog class="help" (click)="$event.target === dialog && close()">
+  <header>
+    <h2>Using the nuXmv diagram editor</h2>
+    <button type="button" class="icon" (click)="close()" aria-label="Close help">×</button>
+  </header>
+  <div class="help-body">
+    <section>
+      <h3>Workflow</h3>
+      <ol>
+        <li><strong>Draw</strong> a directed state transition diagram, or <strong>type</strong> it in the text editor — both views stay in sync.</li>
+        <li>Declare the <strong>attributes</strong> (atoms) in the <em>Attributes</em> tab and give them a value in each state.</li>
+        <li>Mark one or more <strong>initial</strong> states (double border).</li>
+        <li>Enter <strong>properties</strong> (LTL, CTL or invariants) and optional fairness constraints.</li>
+        <li><strong>Check</strong> with nuXmv. False properties come with a counterexample that can be replayed on the diagram.</li>
+      </ol>
+    </section>
+    <section>
+      <h3>Drawing board</h3>
+      <ul>
+        <li><em>Select</em> mode: click to select, drag to move, drag on the background to box-select, double-click the background to add a state.</li>
+        <li><em>State</em> mode: every click on the background creates a state.</li>
+        <li><em>Transition</em> mode: drag from a state to another (or back onto itself for a self-loop).</li>
+        <li>Mouse wheel zooms, dragging the background pans. <kbd>Delete</kbd> removes the selection.</li>
+        <li>Dashed border: dead-end state (no successor). nuXmv needs every path to be infinite, so the generated model makes it loop on itself.</li>
+      </ul>
+    </section>
+    <section>
+      <h3>Text syntax (.nxd)</h3>
+      <pre class="code small">diagram ResourceMonitor
+
+attributes {{ '{' }}
+  status  : {{ '{' }} ready, busy {{ '}' }};   // enumeration
+  request : boolean;
+  level   : 0..3;              // integer range
+{{ '}' }}
+
+initial state s0 "idle" {{ '{' }} status = ready, request = TRUE {{ '}' }} at (80, 80)
+state s1 {{ '{' }} status = busy {{ '}' }}
+
+s0 -> s1 : "request";
+s1 -> s0;
+
+FAIRNESS request;
+LTLSPEC G (request -> F status = busy);
+CTLSPEC NAME reset := AG EF state = s0;
+INVARSPEC level &lt;= 3;</pre>
+      <p>Expressions use the nuXmv syntax: <code>! &amp; | xor -&gt; &lt;-&gt;</code>, comparisons, LTL
+        <code>G F X U V</code> and CTL <code>AG AF AX EG EF EX A[p U q] E[p U q]</code>. The variable
+        <code>state</code> holds the current state name.</p>
+    </section>
+    <section>
+      <h3>Engines</h3>
+      <ul>
+        <li><strong>BDD</strong>: exact symbolic model checking of all specifications (default).</li>
+        <li><strong>BMC</strong>: bounded model checking of LTL properties up to the given bound — finds short counterexamples, cannot prove properties.</li>
+        <li><strong>IC3</strong>: SAT-based proofs of invariants and LTL properties; CTL is still checked with BDDs.</li>
+      </ul>
+    </section>
+  </div>
+</dialog>

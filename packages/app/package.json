@@ -1,0 +1,41 @@
+{
+  "name": "@nuxmv-editor/app",
+  "version": "0.1.0",
+  "scripts": {
+    "ng": "ng",
+    "start": "ng serve --proxy-config proxy.conf.json",
+    "build": "ng build",
+    "watch": "ng build --watch --configuration development",
+    "test": "ng test",
+    "typecheck": "tsc -p tsconfig.app.json --noEmit"
+  },
+  "private": true,
+  "dependencies": {
+    "@angular/common": "^22.2.0",
+    "@angular/compiler": "^22.2.0",
+    "@angular/core": "^22.2.0",
+    "@angular/forms": "^22.2.0",
+    "@angular/platform-browser": "^22.2.0",
+    "rxjs": "~7.8.0",
+    "tslib": "^2.3.0",
+    "@nuxmv-editor/language": "0.1.0",
+    "cytoscape": "^3.34.3",
+    "cytoscape-edgehandles": "^4.0.1",
+    "@codemirror/lint": "^6.9.7",
+    "@codemirror/language": "^6.12.4",
+    "@codemirror/state": "^6.7.6",
+    "@codemirror/view": "^6.43.13",
+    "@codemirror/commands": "^6.11.1",
+    "@lezer/highlight": "^1.2.4"
+  },
+  "devDependencies": {
+    "@angular/build": "^22.2.0",
+    "@angular/cli": "^22.2.0",
+    "@angular/compiler-cli": "^22.2.0",
+    "jsdom": "^30.0.0",
+    "prettier": "^3.8.1",
+    "typescript": "~6.0.3",
+    "vitest": "^5.0.0",
+    "@types/cytoscape": "^3.31.0"
+  }
+}

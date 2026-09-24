@@ -1,0 +1,121 @@
+<header class="topbar">
+  <div class="brand">
+    <span class="logo" aria-hidden="true">◉→◯</span>
+    <span class="title">nuXmv Diagram Editor</span>
+  </div>
+  <nav class="menubar" aria-label="Main menu">
+    <div class="menu">
+      <button type="button" (click)="toggleMenu('file', $event)" [attr.aria-expanded]="openMenu() === 'file'">File</button>
+      @if (openMenu() === 'file') {
+        <div class="menu-list" role="menu">
+          <button type="button" role="menuitem" (click)="newDiagram()">New diagram</button>
+          <button type="button" role="menuitem" (click)="open()">Open .nxd…</button>
+          <button type="button" role="menuitem" (click)="save()">Save .nxd <kbd>⌘S</kbd></button>
+          <hr />
+          <button type="button" role="menuitem" (click)="exportSmv()">Export nuXmv model (.smv)</button>
+          <button type="button" role="menuitem" (click)="exportPng()">Export diagram (.png)</button>
+        </div>
+      }
+    </div>
+    <div class="menu">
+      <button type="button" (click)="toggleMenu('examples', $event)" [attr.aria-expanded]="openMenu() === 'examples'">Examples</button>
+      @if (openMenu() === 'examples') {
+        <div class="menu-list wide" role="menu">
+          @for (e of examples; track e.id) {
+            <button type="button" role="menuitem" (click)="loadExample(e.id)">
+              <strong>{{ e.title }}</strong>
+              <span class="muted small">{{ e.description }}</span>
+            </button>
+          }
+        </div>
+      }
+    </div>
+    <div class="menu">
+      <button type="button" (click)="toggleMenu('attributes', $event)" [attr.aria-expanded]="openMenu() === 'attributes'">Attributes</button>
+      @if (openMenu() === 'attributes') {
+        <div class="menu-list" role="menu">
+          <button type="button" role="menuitem" (click)="tab.set('attributes')">Edit attribute table</button>
+        </div>
+      }
+    </div>
+    <div class="menu">
+      <button type="button" (click)="toggleMenu('nuxmv', $event)" [attr.aria-expanded]="openMenu() === 'nuxmv'">nuXmv</button>
+      @if (openMenu() === 'nuxmv') {
+        <div class="menu-list" role="menu">
+          <button type="button" role="menuitem" (click)="tab.set('model')">Show generated model</button>
+          <button type="button" role="menuitem" (click)="check()" [disabled]="store.errorCount() > 0">Check properties</button>
+          <button type="button" role="menuitem" (click)="simulate()">Simulate the diagram</button>
+          <button type="button" role="menuitem" (click)="tab.set('console')">Show nuXmv output</button>
+          <hr />
+          <button type="button" role="menuitem" (click)="api.refreshStatus()">Re-detect nuXmv</button>
+        </div>
+      }
+    </div>
+    <div class="menu">
+      <button type="button" (click)="openHelp()">Help</button>
+    </div>
+  </nav>
+  <span class="spacer"></span>
+  @if (message()) {
+    <span class="flash" role="status">{{ message() }}</span>
+  }
+  <span class="file mono" [title]="store.dirty() ? 'Unsaved changes' : 'Saved'">{{ store.fileName() }}{{ store.dirty() ? ' •' : '' }}</span>
+  <span class="status" [class.ok]="api.status().available" [class.bad]="api.status().checked && !api.status().available"
+    [title]="api.status().error ?? api.status().version ?? ''">
+    @if (!api.status().checked) { checking nuXmv… } @else if (api.status().available) { {{ api.status().version ?? 'nuXmv' }} } @else { nuXmv unavailable }
+  </span>
+  <button type="button" class="primary" (click)="check()" [disabled]="store.errorCount() > 0 || store.verification()?.running">▶ Check</button>
+</header>
+
+<main class="workspace" [class.no-text]="!showText()">
+  @if (showText()) {
+    <section class="pane text-pane" aria-label="Text editor">
+      <div class="pane-head">
+        <span>Diagram text <span class="muted small">(.nxd · Langium)</span></span>
+        <span class="spacer"></span>
+        <span class="counts">
+          @if (store.errorCount()) { <span class="badge fail">{{ store.errorCount() }} error{{ store.errorCount() > 1 ? 's' : '' }}</span> }
+          @if (store.warningCount()) { <span class="badge warn">{{ store.warningCount() }} warning{{ store.warningCount() > 1 ? 's' : '' }}</span> }
+        </span>
+        <button type="button" class="icon" (click)="showText.set(false)" title="Hide the text editor" aria-label="Hide the text editor">⟨</button>
+      </div>
+      <app-text-editor class="grow" />
+      <div class="problems-wrap">
+        <app-problems-list (reveal)="reveal($event)" />
+      </div>
+    </section>
+  } @else {
+    <button type="button" class="show-text" (click)="showText.set(true)" title="Show the text editor">⟩ Text</button>
+  }
+
+  <section class="pane canvas-pane" aria-label="Diagram editor">
+    <app-diagram-canvas />
+  </section>
+
+  <aside class="pane inspector-pane" aria-label="Inspector">
+    <app-inspector />
+  </aside>
+
+  <section class="pane bottom-pane" aria-label="Details">
+    <div class="tabs" role="tablist">
+      @for (t of tabs(); track t.id) {
+        <button type="button" role="tab" [class.active]="tab() === t.id" [attr.aria-selected]="tab() === t.id" (click)="tab.set(t.id)">
+          {{ t.label }}
+          @if (t.badge) { <span class="badge fail">{{ t.badge }}</span> }
+          @if (t.dot) { <span class="dot" aria-hidden="true"></span> }
+        </button>
+      }
+    </div>
+    <div class="tab-body">
+      @switch (tab()) {
+        @case ('attributes') { <app-attribute-table /> }
+        @case ('properties') { <app-properties-panel /> }
+        @case ('trace') { <app-trace-panel /> }
+        @case ('model') { <app-output-panel view="model" /> }
+        @case ('console') { <app-output-panel view="console" /> }
+      }
+    </div>
+  </section>
+</main>
+
+<app-help-dialog />

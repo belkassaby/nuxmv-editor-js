@@ -1,0 +1,33 @@
+// Microwave oven (Clarke, Grumberg & Peled)
+diagram Microwave
+
+attributes {
+  start : boolean;
+  close : boolean;
+  heat  : boolean;
+  error : boolean;
+}
+
+initial state s1 "idle" { start = FALSE, close = FALSE, heat = FALSE, error = FALSE } at (80, 60)
+state s2 "start oven" { start = TRUE, close = FALSE, heat = FALSE, error = TRUE } at (340, 60)
+state s3 "close door" { start = FALSE, close = TRUE, heat = FALSE, error = FALSE } at (80, 260)
+state s4 "cook" { start = FALSE, close = TRUE, heat = TRUE, error = FALSE } at (80, 460)
+state s5 "close with error" { start = TRUE, close = TRUE, heat = FALSE, error = TRUE } at (340, 260)
+state s6 "start" { start = TRUE, close = TRUE, heat = FALSE, error = FALSE } at (340, 460)
+state s7 "warmup" { start = TRUE, close = TRUE, heat = TRUE, error = FALSE } at (580, 460)
+
+s1 -> s2 : "start oven";
+s1 -> s3 : "close door";
+s2 -> s5 : "close door";
+s3 -> s1 : "open door";
+s3 -> s6 : "start oven";
+s4 -> s1 : "open door";
+s4 -> s3 : "done";
+s4 -> s4 : "cook";
+s5 -> s2 : "open door";
+s5 -> s3 : "reset";
+s6 -> s7 : "warmup";
+s7 -> s4 : "start cooking";
+
+CTLSPEC AG (start -> AF heat);
+FAIRNESS start & close & !error;

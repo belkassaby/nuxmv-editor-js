@@ -1,0 +1,29 @@
+{
+  "name": "@nuxmv-editor/server",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Node.js backend that runs nuXmv on generated models, plus the nxd command-line tool.",
+  "type": "module",
+  "main": "./out/index.js",
+  "bin": {
+    "nxd": "./out/cli.js"
+  },
+  "scripts": {
+    "build": "tsc -b tsconfig.json",
+    "dev": "tsx watch src/main.ts",
+    "start": "node out/main.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@nuxmv-editor/language": "0.1.0",
+    "express": "^5.2.1"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/node": "^24.0.0",
+    "tsx": "^4.23.15",
+    "typescript": "~6.0.3",
+    "vitest": "^5.0.1"
+  }
+}

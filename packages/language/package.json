@@ -1,0 +1,30 @@
+{
+  "name": "@nuxmv-editor/language",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Langium-based state diagram language (.nxd), diagram model, nuXmv model generator and nuXmv output parser.",
+  "type": "module",
+  "main": "./out/index.js",
+  "types": "./out/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./out/index.d.ts",
+      "default": "./out/index.js"
+    }
+  },
+  "files": ["out", "src"],
+  "scripts": {
+    "langium:generate": "langium generate",
+    "build": "langium generate && tsc -b tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "langium": "~4.4.0"
+  },
+  "devDependencies": {
+    "langium-cli": "~4.4.0",
+    "typescript": "~6.0.3",
+    "vitest": "^5.0.1"
+  }
+}

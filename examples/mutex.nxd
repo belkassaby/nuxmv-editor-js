@@ -1,0 +1,36 @@
+// Two processes, each non-critical (n), trying (t) or critical (c)
+diagram Mutex
+
+attributes {
+  p1 : { n, t, c };
+  p2 : { n, t, c };
+}
+
+initial state s0 "n1 n2" { p1 = n, p2 = n } at (300, 40)
+state s1 "t1 n2" { p1 = t, p2 = n } at (160, 150)
+state s5 "n1 t2" { p1 = n, p2 = t } at (440, 150)
+state s2 "c1 n2" { p1 = c, p2 = n } at (60, 280)
+state s3 "t1 t2" { p1 = t, p2 = t } at (300, 280)
+state s6 "n1 c2" { p1 = n, p2 = c } at (540, 280)
+state s4 "c1 t2" { p1 = c, p2 = t } at (180, 420)
+state s7 "t1 c2" { p1 = t, p2 = c } at (420, 420)
+
+s0 -> s1;
+s0 -> s5;
+s1 -> s2;
+s1 -> s3;
+s5 -> s3;
+s5 -> s6;
+s2 -> s0;
+s2 -> s4;
+s3 -> s4;
+s3 -> s7;
+s6 -> s0;
+s6 -> s7;
+s4 -> s5;
+s7 -> s1;
+
+CTLSPEC NAME safety := AG !(p1 = c & p2 = c);
+LTLSPEC NAME liveness := G (p1 = t -> F p1 = c);
+CTLSPEC NAME non_blocking := AG (p1 = n -> EX p1 = t);
+INVARSPEC NAME never_both_critical := !(p1 = c & p2 = c);

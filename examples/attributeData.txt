@@ -1,0 +1,10 @@
+//attribNameList
+p q r
+//attribValuesList
+TRUE FALSE
+TRUE FALSE
+TRUE FALSE
+//stateAttribValue
+TRUE FALSE FALSE
+TRUE TRUE FALSE
+FALSE TRUE TRUE

@@ -1,0 +1,65 @@
+<div class="panel-bar">
+  <button type="button" class="primary" (click)="addAttribute()">+ Add attribute</button>
+  <button type="button" (click)="importLegacy()" title="Import the attributeData.txt format of the original JungToNusmv tool">Import attributeData.txt…</button>
+  <span class="muted small">Values left at <em>(any)</em> are unconstrained: nuXmv may choose any value of the domain in that state.</span>
+</div>
+@if (error()) {
+  <p class="error-text">{{ error() }}</p>
+}
+@if (rows().length === 0) {
+  <p class="muted pad">No attributes (atoms) yet. Atoms label the states of the diagram: the labelling function L(s) of the model.</p>
+} @else {
+  <div class="table-scroll">
+    <table class="grid">
+      <thead>
+        <tr>
+          <th>Attribute</th>
+          <th>Type</th>
+          <th>Domain</th>
+          <th>Set all</th>
+          @for (s of store.model().states; track s.name) {
+            <th class="mono" [class.initial-col]="s.initial" [title]="s.label ?? ''">{{ s.name }}</th>
+          }
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (row of rows(); track $index; let i = $index) {
+          <tr>
+            <td><input #n class="mono narrow" [value]="row.attribute.name" (change)="rename(i, n)" (keydown.enter)="n.blur()" spellcheck="false" /></td>
+            <td>
+              <select [value]="typeKind(row.attribute.type)" (change)="setKind(i, $any($event.target).value)">
+                <option value="boolean" [selected]="row.attribute.type.kind === 'boolean'">boolean</option>
+                <option value="enum" [selected]="row.attribute.type.kind === 'enum'">enumeration</option>
+                <option value="range" [selected]="row.attribute.type.kind === 'range'">integer range</option>
+              </select>
+            </td>
+            <td>
+              <input #d class="mono" [value]="domainText(row.attribute.type)" [disabled]="row.attribute.type.kind === 'boolean'" (change)="setDomain(i, d)" (keydown.enter)="d.blur()" spellcheck="false" />
+            </td>
+            <td>
+              <select (change)="fill(row.attribute.name, $any($event.target).value); $any($event.target).value = '-'">
+                <option value="-" selected>…</option>
+                <option value="">(any)</option>
+                @for (v of row.domain; track v) {
+                  <option [value]="v">{{ v }}</option>
+                }
+              </select>
+            </td>
+            @for (s of store.model().states; track s.name) {
+              <td>
+                <select [class.unset]="!s.values[row.attribute.name]" (change)="setValue(s.name, row.attribute.name, $any($event.target).value)">
+                  <option value="" [selected]="!s.values[row.attribute.name]">(any)</option>
+                  @for (v of row.domain; track v) {
+                    <option [value]="v" [selected]="s.values[row.attribute.name] === v">{{ v }}</option>
+                  }
+                </select>
+              </td>
+            }
+            <td><button type="button" class="icon danger" (click)="remove(i)" [attr.aria-label]="'Remove ' + row.attribute.name" title="Remove attribute">×</button></td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+}

@@ -1,0 +1,50 @@
+<div class="canvas-toolbar" role="toolbar" aria-label="Diagram tools">
+  <div class="segmented" role="radiogroup" aria-label="Editing mode">
+    <button type="button" [class.active]="mode() === 'select'" (click)="mode.set('select')" title="Select and move states (double-click the background to add a state)">
+      <span aria-hidden="true">⬚</span> Select
+    </button>
+    <button type="button" [class.active]="mode() === 'add-state'" (click)="mode.set('add-state')" title="Click on the drawing board to create states">
+      <span aria-hidden="true">◯</span> State
+    </button>
+    <button type="button" [class.active]="mode() === 'add-transition'" (click)="mode.set('add-transition')" title="Drag from one state to another to create a transition">
+      <span aria-hidden="true">→</span> Transition
+    </button>
+  </div>
+  <span class="spacer"></span>
+  <button type="button" class="icon" (click)="zoomBy(1.2)" title="Zoom in" aria-label="Zoom in">+</button>
+  <button type="button" class="icon" (click)="zoomBy(1 / 1.2)" title="Zoom out" aria-label="Zoom out">−</button>
+  <button type="button" (click)="fit()" title="Fit the diagram in view">Fit</button>
+  <button type="button" (click)="store.requestLayout()" title="Arrange the states automatically">Layout</button>
+  <button type="button" (click)="exportPng()" title="Download the diagram as PNG">PNG</button>
+</div>
+<div class="cy-wrap">
+  <div class="cy" #cy></div>
+  @if (empty()) {
+    <div class="empty-hint">
+      <p><strong>Empty drawing board.</strong></p>
+      <p>Double-click here (or use <em>State</em> mode) to create states, then switch to <em>Transition</em> mode and drag between states.<br />
+        You can also type the diagram in the text editor.</p>
+    </div>
+  }
+  @if (store.hasSyntaxErrors()) {
+    <div class="banner" role="status">The text has syntax errors — showing the last valid diagram. Fix the text to edit the drawing again.</div>
+  } @else if (store.notice()) {
+    <div class="banner" role="status">{{ store.notice() }}</div>
+  }
+  @if (tooltip(); as t) {
+    <div class="tooltip" [style.left.px]="t.x" [style.top.px]="t.y">
+      @for (line of t.lines; track $index) {
+        <div [class.title]="$first">{{ line }}</div>
+      }
+    </div>
+  }
+  <div class="legend" aria-hidden="true">
+    <span><i class="lg initial"></i> initial</span>
+    <span><i class="lg dead"></i> dead end</span>
+    @if (store.highlight()) {
+      <span><i class="lg current"></i> current</span>
+      <span><i class="lg visited"></i> visited</span>
+    }
+    <span class="zoom">{{ (zoom() * 100).toFixed(0) }}%</span>
+  </div>
+</div>

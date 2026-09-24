@@ -1,0 +1,92 @@
+@if (store.trace(); as t) {
+  <div class="panel-bar">
+    <strong>{{ t.trace.description || 'Counterexample' }}</strong>
+    @if (spec(); as s) { <span class="mono muted">{{ s.kind }} {{ s.expression }}</span> }
+    <span class="spacer"></span>
+    <button type="button" class="icon" (click)="store.traceStep.set(0)" title="First step" aria-label="First step">⏮</button>
+    <button type="button" class="icon" (click)="store.stepTrace(-1)" title="Previous step" aria-label="Previous step">◀</button>
+    <button type="button" (click)="toggle()">{{ playing() ? 'Pause' : 'Play' }}</button>
+    <button type="button" class="icon" (click)="store.stepTrace(1)" title="Next step" aria-label="Next step">▶</button>
+    <button type="button" class="icon" (click)="store.traceStep.set(t.trace.steps.length - 1)" title="Last step" aria-label="Last step">⏭</button>
+    <span class="muted small">step {{ store.traceStep() + 1 }} / {{ t.trace.steps.length }}</span>
+    <button type="button" (click)="close()">Close</button>
+  </div>
+  @if (t.trace.loopStart !== undefined) {
+    <p class="muted small pad">Lasso-shaped counterexample: from step {{ t.trace.loopStart + 1 }} the last steps repeat forever (dashed edge on the diagram).</p>
+  }
+  <div class="table-scroll">
+    <table class="grid trace">
+      <thead>
+        <tr>
+          <th>Variable</th>
+          @for (step of t.trace.steps; track $index; let i = $index) {
+            <th [class.current-col]="i === store.traceStep()" (click)="store.traceStep.set(i)" class="clickable">
+              {{ step.id }}
+              @if (t.trace.loopStart === i) { <span class="loop-mark" title="Loop starts here">↻</span> }
+            </th>
+          }
+        </tr>
+      </thead>
+      <tbody>
+        @for (name of variables(); track name) {
+          <tr>
+            <th class="mono">{{ name }}</th>
+            @for (step of t.trace.steps; track $index; let i = $index) {
+              <td class="mono clickable" [class.changed]="step.changed.includes(name) && i > 0" [class.current-col]="i === store.traceStep()" (click)="store.traceStep.set(i)">{{ step.values[name] }}</td>
+            }
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+} @else if (store.simulation(); as path) {
+  <div class="panel-bar">
+    <strong>Simulation</strong>
+    <span class="muted small">Click a highlighted successor on the diagram, or step randomly.</span>
+    <span class="spacer"></span>
+    <button type="button" (click)="store.simulateBack()" [disabled]="path.length === 0">Back</button>
+    <button type="button" class="primary" (click)="store.simulateRandom()" [disabled]="(store.highlight()?.candidates?.length ?? 0) === 0">Random step</button>
+    <button type="button" (click)="store.startSimulation()">Restart</button>
+    <button type="button" (click)="close()">Stop</button>
+  </div>
+  @if (path.length === 0) {
+    <p class="muted pad">Several initial states: click the one to start from.</p>
+  }
+  <div class="table-scroll">
+    <table class="grid trace">
+      <thead>
+        <tr>
+          <th>Step</th>
+          @for (row of simulationRows(); track $index) {
+            <th [class.current-col]="$last">{{ $index + 1 }}</th>
+          }
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <th class="mono">state</th>
+          @for (row of simulationRows(); track $index) {
+            <td class="mono" [class.current-col]="$last">{{ row.name }}</td>
+          }
+        </tr>
+        @for (a of store.model().attributes; track a.name) {
+          <tr>
+            <th class="mono">{{ a.name }}</th>
+            @for (row of simulationRows(); track $index) {
+              <td class="mono" [class.current-col]="$last">{{ row.state?.values?.[a.name] ?? '(any)' }}</td>
+            }
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+} @else {
+  <div class="pad">
+    <p>Nothing to replay yet.</p>
+    <ul class="muted">
+      <li>Run nuXmv from the <em>Properties</em> tab; when a property is false, open its <em>Counterexample</em> to replay it on the diagram.</li>
+      <li>Or explore the model by hand:</li>
+    </ul>
+    <button type="button" class="primary" (click)="store.startSimulation()" [disabled]="store.model().states.length === 0">Start simulation</button>
+  </div>
+}

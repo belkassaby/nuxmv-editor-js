@@ -1,0 +1,14 @@
+{
+  "projectName": "StateDiagram",
+  "languages": [
+    {
+      "id": "state-diagram",
+      "grammar": "src/state-diagram.langium",
+      "fileExtensions": [".nxd"],
+      "textMate": {
+        "out": "syntaxes/state-diagram.tmLanguage.json"
+      }
+    }
+  ],
+  "out": "src/generated"
+}

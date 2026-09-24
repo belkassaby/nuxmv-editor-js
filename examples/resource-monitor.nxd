@@ -1,0 +1,28 @@
+// Resource monitor (Huth & Ryan, Logic in Computer Science, ch. 3)
+diagram ResourceMonitor
+
+attributes {
+  status  : { ready, busy };
+  request : boolean;
+}
+
+initial state s0 { status = ready, request = TRUE } at (120, 100)
+state s1 { status = busy, request = TRUE } at (380, 100)
+state s2 { status = ready, request = FALSE } at (120, 320)
+state s3 { status = busy, request = FALSE } at (380, 320)
+
+s0 -> s1;
+s0 -> s3;
+s1 -> s1;
+s1 -> s3;
+s2 -> s0;
+s2 -> s1;
+s2 -> s2;
+s2 -> s3;
+s3 -> s0;
+s3 -> s1;
+s3 -> s2;
+s3 -> s3;
+
+LTLSPEC G (request -> F status = ready);
+CTLSPEC AG EF status = ready;

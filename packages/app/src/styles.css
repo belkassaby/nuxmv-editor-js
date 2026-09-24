@@ -1,0 +1,187 @@
+/* ------------------------------------------------------------------ tokens */
+:root {
+  color-scheme: light;
+  --sans: Inter, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --bg: #eef1f5;
+  --surface: #ffffff;
+  --canvas-bg: #fbfcfe;
+  --border: #d9dfe7;
+  --hover: #eef2f7;
+  --text: #1b2733;
+  --muted: #5b6b7c;
+  --accent: #2f6fdf;
+  --accent-bg: #e3edfd;
+  --success: #2b8a3e;
+  --success-bg: #e3f5e8;
+  --error: #c92a2a;
+  --error-bg: #fdeaea;
+  --warning: #c77700;
+  --warning-bg: #fff4e0;
+  --node-bg: #e8f1fb;
+  --node-border: #4a7fb5;
+  --node-text: #1b2733;
+  --edge: #7d8fa3;
+  --trace-current: #f59f00;
+  --trace-border: #b35c00;
+  --trace-visited: #fde9c9;
+  --syntax-comment: #6a7b8c;
+  --syntax-keyword: #7b3fbf;
+  --syntax-section: #b3261e;
+  --syntax-temporal: #0b7285;
+  --syntax-constant: #c2410c;
+  --syntax-string: #2b8a3e;
+  --syntax-operator: #5b6b7c;
+  --shadow: 0 8px 24px rgb(20 30 45 / 14%);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+    --bg: #0f141a;
+    --surface: #161c23;
+    --canvas-bg: #12171d;
+    --border: #2a333d;
+    --hover: #212a34;
+    --text: #e3e9ef;
+    --muted: #93a3b3;
+    --accent: #6ea2ff;
+    --accent-bg: #1c2b45;
+    --success: #69db7c;
+    --success-bg: #173222;
+    --error: #ff8787;
+    --error-bg: #3a1c1c;
+    --warning: #ffc078;
+    --warning-bg: #3a2c16;
+    --node-bg: #1f3148;
+    --node-border: #6ea2ff;
+    --node-text: #e3e9ef;
+    --edge: #7f8fa0;
+    --trace-current: #f59f00;
+    --trace-border: #ffd8a8;
+    --trace-visited: #4a3a1c;
+    --syntax-comment: #7d8c9b;
+    --syntax-keyword: #c3a6ff;
+    --syntax-section: #ff8787;
+    --syntax-temporal: #66d9e8;
+    --syntax-constant: #ffa94d;
+    --syntax-string: #8ce99a;
+    --syntax-operator: #93a3b3;
+    --shadow: 0 8px 24px rgb(0 0 0 / 45%);
+  }
+}
+
+/* -------------------------------------------------------------------- base */
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body { background: var(--bg); color: var(--text); font: 14px/1.4 var(--sans); }
+h4 { margin: 14px 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+code, kbd, .mono { font-family: var(--mono); font-size: 0.92em; }
+kbd { border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 4px; padding: 0 4px; font-size: 11px; }
+button, input, select { font: inherit; color: inherit; }
+button { cursor: pointer; border: 1px solid var(--border); background: var(--surface); border-radius: 6px; padding: 4px 10px; }
+button:hover:not(:disabled) { background: var(--hover); }
+button:disabled { opacity: 0.5; cursor: default; }
+button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+button.primary:hover:not(:disabled) { background: color-mix(in srgb, var(--accent) 85%, #000); }
+button.danger { color: var(--error); }
+button.icon { padding: 2px 8px; min-width: 28px; }
+button.link { border: 0; background: none; padding: 0; color: var(--accent); font-family: var(--mono); }
+button.active, .segmented button.active { background: var(--accent-bg); border-color: var(--accent); color: var(--accent); }
+input, select { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 4px 6px; min-width: 0; }
+input:disabled { color: var(--muted); background: var(--hover); }
+.segmented { display: inline-flex; }
+.segmented button { border-radius: 0; margin-left: -1px; }
+.segmented button:first-child { border-radius: 6px 0 0 6px; }
+.segmented button:last-child { border-radius: 0 6px 6px 0; }
+
+/* ----------------------------------------------------------------- helpers */
+.muted { color: var(--muted); }
+.small { font-size: 12px; }
+.big { font-size: 16px; font-weight: 600; }
+.pad { padding: 12px 0; }
+.pad-x { padding: 0 8px; margin: 4px 0; }
+.spacer { flex: 1; }
+.error-text { color: var(--error); background: var(--error-bg); padding: 6px 8px; border-radius: 6px; margin: 6px 0; }
+.warning-text { color: var(--warning); background: var(--warning-bg); padding: 6px 8px; border-radius: 6px; margin: 6px 0; }
+.ok-text { color: var(--success); }
+.actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+.badge { display: inline-block; font-size: 11px; padding: 1px 7px; border-radius: 999px; background: var(--hover); color: var(--muted); font-weight: 600; }
+.badge.ok { background: var(--success-bg); color: var(--success); }
+.badge.fail { background: var(--error-bg); color: var(--error); }
+.badge.warn, .badge.unknown { background: var(--warning-bg); color: var(--warning); }
+.panel-title { font-weight: 600; padding: 8px 0; border-bottom: 1px solid var(--border); margin-bottom: 8px; }
+.panel-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 0; position: sticky; top: 0; background: var(--surface); z-index: 1; }
+.inline { display: inline-flex; align-items: center; gap: 6px; }
+.narrow { width: 72px; }
+.clickable { cursor: pointer; }
+.spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: spin 0.8s linear infinite; vertical-align: -1px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* --------------------------------------------------------------- inspector */
+.form { display: flex; flex-direction: column; gap: 8px; }
+.field { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--muted); }
+.field input, .field select { color: var(--text); font-size: 14px; }
+.field.row { flex-direction: row; align-items: center; justify-content: space-between; gap: 8px; color: var(--text); }
+.field.row select { min-width: 110px; }
+.check { display: flex; align-items: center; gap: 6px; }
+.link-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 3px; }
+.stats { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 4px 0; }
+.stats dt { color: var(--muted); }
+.stats dd { margin: 0; font-weight: 600; }
+
+/* ------------------------------------------------------------------ tables */
+.table-scroll { overflow: auto; max-width: 100%; }
+table.grid { border-collapse: collapse; font-size: 13px; }
+table.grid th, table.grid td { border: 1px solid var(--border); padding: 3px 6px; text-align: left; white-space: nowrap; }
+table.grid thead th { background: var(--hover); position: sticky; top: 0; font-weight: 600; }
+table.grid tbody th { background: var(--hover); font-weight: 500; }
+table.grid select { padding: 2px 4px; }
+table.grid select.unset { color: var(--muted); }
+.initial-col { box-shadow: inset 0 -3px 0 var(--accent); }
+table.trace td.changed { font-weight: 700; color: var(--accent); }
+table.trace .current-col { background: color-mix(in srgb, var(--trace-current) 22%, transparent); }
+.loop-mark { color: var(--trace-border); margin-left: 4px; }
+
+/* ----------------------------------------------------------- specifications */
+.spec-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; }
+.spec { display: grid; grid-template-columns: 24px 118px 110px 1fr auto auto; gap: 6px; align-items: center; padding: 4px 6px; border: 1px solid var(--border); border-left: 4px solid var(--border); border-radius: 6px; }
+.spec:not(:has(.verdict)) { grid-template-columns: 118px 1fr auto; }
+.spec.is-true { border-left-color: var(--success); }
+.spec.is-false { border-left-color: var(--error); }
+.spec.is-unknown { border-left-color: var(--warning); }
+.spec .verdict { font-weight: 700; text-align: center; font-size: 16px; }
+.spec.is-true .verdict { color: var(--success); }
+.spec.is-false .verdict { color: var(--error); }
+.spec.is-unknown .verdict { color: var(--warning); }
+.spec-note { grid-column: 1 / -1; margin: 0; font-size: 12px; }
+.summary { display: inline-flex; gap: 6px; align-items: center; }
+
+/* -------------------------------------------------------------- code/problems */
+pre.code { margin: 0; padding: 10px 12px; background: var(--canvas-bg); border: 1px solid var(--border); border-radius: 6px; font: 12.5px/1.5 var(--mono); overflow: auto; white-space: pre; }
+.problems { list-style: none; margin: 0; padding: 4px; }
+.problem { display: grid; grid-template-columns: 62px 46px 1fr; gap: 6px; width: 100%; text-align: left; border: 0; background: none; padding: 3px 6px; font-size: 12px; }
+.problem .sev { font-weight: 700; text-transform: uppercase; font-size: 10px; padding-top: 2px; }
+.problem.error .sev { color: var(--error); }
+.problem.warning .sev { color: var(--warning); }
+.problem.info .sev, .problem.hint .sev { color: var(--accent); }
+.problem .loc { color: var(--muted); font-family: var(--mono); }
+
+/* ------------------------------------------------------------- CodeMirror */
+.cm-editor { height: 100%; font-size: 13px; background: var(--surface); color: var(--text); }
+.cm-editor .cm-scroller { font-family: var(--mono); line-height: 1.55; }
+.cm-editor .cm-gutters { background: var(--surface); color: var(--muted); border-right: 1px solid var(--border); }
+.cm-editor .cm-activeLine, .cm-editor .cm-activeLineGutter { background: color-mix(in srgb, var(--accent) 7%, transparent); }
+.cm-editor .cm-cursor { border-left-color: var(--text); }
+.cm-editor.cm-focused .cm-selectionBackground, .cm-editor .cm-selectionBackground, .cm-content ::selection { background: color-mix(in srgb, var(--accent) 28%, transparent) !important; }
+.cm-tooltip { background: var(--surface) !important; color: var(--text); border: 1px solid var(--border) !important; border-radius: 6px; }
+
+/* ------------------------------------------------------------------- help */
+dialog.help { width: min(760px, calc(100vw - 32px)); max-height: calc(100vh - 64px); padding: 0; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
+dialog.help::backdrop { background: rgb(0 0 0 / 35%); }
+dialog.help header { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--surface); }
+dialog.help h2 { margin: 0; font-size: 17px; }
+dialog.help h3 { font-size: 14px; margin: 16px 0 6px; }
+.help-body { padding: 0 16px 16px; line-height: 1.55; }
+.help-body ul, .help-body ol { padding-left: 20px; margin: 4px 0; }

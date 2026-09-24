@@ -1,0 +1,106 @@
+<div class="panel-bar">
+  <button type="button" class="primary run" (click)="api.verify()" [disabled]="store.verification()?.running || store.errorCount() > 0"
+    [title]="store.errorCount() > 0 ? 'Fix the errors in the diagram first' : 'Generate the model and run nuXmv'">
+    @if (store.verification()?.running) { <span class="spinner" aria-hidden="true"></span> Checking… } @else { ▶ Check with nuXmv }
+  </button>
+  <label class="inline">
+    Engine
+    <select (change)="setEngine($any($event.target).value)">
+      @for (e of engines; track e[0]) {
+        <option [value]="e[0]" [selected]="api.engine() === e[0]">{{ e[1] }}</option>
+      }
+    </select>
+  </label>
+  @if (api.engine() !== 'bdd') {
+    <label class="inline">Bound <input type="number" min="1" max="1000" class="narrow" [value]="api.bound()" (change)="setBound($any($event.target).value)" /></label>
+  }
+  <span class="spacer"></span>
+  @if (summary(); as s) {
+    <span class="summary">
+      <span class="badge ok">{{ s.true }} true</span>
+      <span class="badge fail">{{ s.false }} false</span>
+      @if (s.unknown) { <span class="badge unknown">{{ s.unknown }} unknown</span> }
+      @if (s.unchecked) { <span class="badge">{{ s.unchecked }} not checked</span> }
+      @if (store.verification()?.durationMs !== undefined) { <span class="muted small">in {{ store.verification()?.durationMs }} ms</span> }
+    </span>
+  }
+</div>
+
+@if (store.verification(); as v) {
+  @if (v.requestError) {
+    <p class="error-text">{{ v.requestError }}</p>
+  }
+  @for (e of v.errors; track $index) {
+    <p class="error-text mono">{{ e }}</p>
+  }
+  @if (v.stale) {
+    <p class="warning-text">The diagram changed since the last check: run nuXmv again to refresh the results.</p>
+  }
+  @if (v.timedOut) {
+    <p class="warning-text">nuXmv was stopped after the time limit.</p>
+  }
+}
+
+<h4>Specifications</h4>
+@if (store.model().specs.length === 0) {
+  <p class="muted">No property yet. Add an LTL, CTL or invariant specification to check against the diagram.</p>
+}
+<ul class="spec-list">
+  @for (spec of store.model().specs; track $index; let i = $index) {
+    @let result = store.verification()?.results?.[i];
+    <li class="spec" [class.is-true]="result?.verdict === 'true'" [class.is-false]="result?.verdict === 'false'" [class.is-unknown]="result?.verdict === 'unknown'">
+      <span class="verdict" [attr.aria-label]="result?.verdict ?? 'not checked'">
+        @switch (result?.verdict) {
+          @case ('true') { ✓ }
+          @case ('false') { ✗ }
+          @case ('unknown') { ? }
+          @default { · }
+        }
+      </span>
+      <select class="kind" (change)="setSpec(i, { kind: $any($event.target).value })">
+        @for (k of kinds; track k) {
+          <option [value]="k" [selected]="spec.kind === k">{{ k }}</option>
+        }
+      </select>
+      <input #nm class="name mono" placeholder="name" [value]="spec.name ?? ''" (change)="setSpec(i, { name: nm.value })" spellcheck="false" />
+      <input #ex class="expr mono" [value]="spec.expression" [placeholder]="placeholders[spec.kind]" (change)="setSpec(i, { expression: ex.value })" (keydown.enter)="ex.blur()" spellcheck="false" />
+      @if (result?.trace) {
+        <button type="button" (click)="store.showTrace(i)" [class.active]="store.trace()?.specIndex === i">Counterexample</button>
+      }
+      <button type="button" class="icon danger" (click)="removeSpec(i)" title="Remove" aria-label="Remove specification">×</button>
+      @if (specProblems()[i]?.length) {
+        <div class="spec-note error-text">{{ specProblems()[i].join(' ') }}</div>
+      } @else if (result?.detail) {
+        <div class="spec-note muted">{{ result?.detail }}</div>
+      } @else if (result?.verdict === 'false' && !result?.trace) {
+        <div class="spec-note muted">nuXmv gave no counterexample for this property.</div>
+      }
+    </li>
+  }
+</ul>
+<div class="actions">
+  <button type="button" (click)="addSpec('LTLSPEC')">+ LTL</button>
+  <button type="button" (click)="addSpec('CTLSPEC')">+ CTL</button>
+  <button type="button" (click)="addSpec('INVARSPEC')">+ Invariant</button>
+</div>
+
+<h4>Fairness constraints</h4>
+@if (store.model().fairness.length === 0) {
+  <p class="muted small">Optional. A FAIRNESS/JUSTICE constraint restricts verification to paths on which it holds infinitely often.</p>
+}
+<ul class="spec-list">
+  @for (f of store.model().fairness; track $index; let i = $index) {
+    <li class="spec">
+      <select class="kind" (change)="setFairness(i, { kind: $any($event.target).value })">
+        @for (k of fairnessKinds; track k) {
+          <option [value]="k" [selected]="f.kind === k">{{ k }}</option>
+        }
+      </select>
+      <input #fx class="expr mono" [value]="f.expression" (change)="setFairness(i, { expression: fx.value })" (keydown.enter)="fx.blur()" spellcheck="false" />
+      <button type="button" class="icon danger" (click)="removeFairness(i)" title="Remove" aria-label="Remove fairness constraint">×</button>
+    </li>
+  }
+</ul>
+<div class="actions">
+  <button type="button" (click)="addFairness()">+ Fairness</button>
+</div>

@@ -1,0 +1,84 @@
+<div class="panel-title">Inspector</div>
+@if (state(); as s) {
+  <section class="form">
+    <label class="field">
+      <span>State name</span>
+      <input #nameInput [value]="s.name" (change)="rename(s.name, nameInput)" (keydown.enter)="nameInput.blur()" spellcheck="false" />
+    </label>
+    @if (renameError()) {
+      <p class="error-text">{{ renameError() }}</p>
+    }
+    <label class="field">
+      <span>Label</span>
+      <input #labelInput [value]="s.label ?? ''" placeholder="optional description" (change)="setLabel(s.name, labelInput.value)" />
+    </label>
+    <label class="check">
+      <input type="checkbox" [checked]="s.initial" (change)="setInitial(s.name, $any($event.target).checked)" />
+      Initial state
+    </label>
+    @if (store.deadEnds().has(s.name)) {
+      <p class="warning-text">Dead end: no outgoing transition. The generated model lets it loop on itself.</p>
+    }
+  </section>
+
+  <section>
+    <h4>Atoms / attributes in {{ s.name }}</h4>
+    @if (attributes().length === 0) {
+      <p class="muted">No attributes declared yet — add some in the <em>Attributes</em> tab.</p>
+    }
+    @for (a of attributes(); track a.name) {
+      <label class="field row">
+        <span class="mono">{{ a.name }}</span>
+        <select [value]="s.values[a.name] ?? ''" (change)="setValue(s.name, a.name, $any($event.target).value)">
+          <option value="">(any)</option>
+          @for (v of a.domain; track v) {
+            <option [value]="v" [selected]="s.values[a.name] === v">{{ v }}</option>
+          }
+        </select>
+      </label>
+    }
+  </section>
+
+  <section>
+    <h4>Transitions</h4>
+    <ul class="link-list">
+      @for (t of outgoing(); track t.index) {
+        <li><button type="button" class="link" (click)="select(t.index)">{{ t.source }} → {{ t.target }}</button>@if (t.label) { <span class="muted"> {{ t.label }}</span> }</li>
+      }
+      @for (t of incoming(); track t.index) {
+        <li><button type="button" class="link" (click)="select(t.index)">{{ t.source }} → {{ t.target }}</button> <span class="muted">(incoming)</span></li>
+      }
+    </ul>
+    <div class="actions">
+      <button type="button" (click)="addSelfLoop(s.name)">Add self-loop</button>
+      <button type="button" class="danger" (click)="store.deleteSelection()">Delete state</button>
+    </div>
+  </section>
+} @else if (transition(); as t) {
+  <section class="form">
+    <p class="big mono">{{ t.source }} → {{ t.target }}</p>
+    <label class="field">
+      <span>Label</span>
+      <input #tl [value]="t.label ?? ''" placeholder="optional, e.g. an action name" (change)="setTransitionLabel($any(store.selection()).index, tl.value)" />
+    </label>
+    <p class="muted small">Labels document the diagram; the generated model is an unlabelled transition system.</p>
+    <div class="actions">
+      <button type="button" (click)="reverse($any(store.selection()).index)">Reverse</button>
+      <button type="button" class="danger" (click)="store.deleteSelection()">Delete transition</button>
+    </div>
+  </section>
+} @else {
+  <section class="form">
+    <label class="field">
+      <span>Diagram name</span>
+      <input #dn [value]="store.model().name ?? ''" (change)="setDiagramName(dn.value)" spellcheck="false" />
+    </label>
+    <dl class="stats">
+      <dt>States</dt><dd>{{ store.model().states.length }}</dd>
+      <dt>Transitions</dt><dd>{{ store.model().transitions.length }}</dd>
+      <dt>Attributes</dt><dd>{{ store.model().attributes.length }}</dd>
+      <dt>Properties</dt><dd>{{ store.model().specs.length }}</dd>
+    </dl>
+    <p class="muted small">Select a state or a transition on the drawing board to edit it. Press <kbd>Delete</kbd> to remove the selection.</p>
+  </section>
+}

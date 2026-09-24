@@ -1,0 +1,61 @@
+{
+  "name": "state-diagram",
+  "scopeName": "source.state-diagram",
+  "fileTypes": [
+    ".nxd"
+  ],
+  "patterns": [
+    {
+      "include": "#comments"
+    },
+    {
+      "name": "keyword.control.state-diagram",
+      "match": "\\b(attributes|INVARSPEC|FAIRNESS|boolean|CTLSPEC|diagram|initial|JUSTICE|LTLSPEC|FALSE|state|NAME|TRUE|xnor|mod|xor|AF|AG|at|AX|EF|EG|EX|A|E|F|G|U|V|X)\\b"
+    },
+    {
+      "name": "string.quoted.double.state-diagram",
+      "begin": "\"",
+      "end": "\"",
+      "patterns": [
+        {
+          "include": "#string-character-escape"
+        }
+      ]
+    }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.block.state-diagram",
+          "begin": "/\\*",
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.definition.comment.state-diagram"
+            }
+          },
+          "end": "\\*/",
+          "endCaptures": {
+            "0": {
+              "name": "punctuation.definition.comment.state-diagram"
+            }
+          }
+        },
+        {
+          "begin": "//--",
+          "beginCaptures": {
+            "1": {
+              "name": "punctuation.whitespace.comment.leading.state-diagram"
+            }
+          },
+          "end": "(?=$)",
+          "name": "comment.line.state-diagram"
+        }
+      ]
+    },
+    "string-character-escape": {
+      "name": "constant.character.escape.state-diagram",
+      "match": "\\\\(x[0-9A-Fa-f]{2}|u[0-9A-Fa-f]{4}|u\\{[0-9A-Fa-f]+\\}|[0-2][0-7]{0,2}|3[0-6][0-7]?|37[0-7]?|[4-7][0-7]?|.|$)"
+    }
+  }
+}

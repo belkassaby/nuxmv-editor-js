@@ -1,0 +1,31 @@
+@if (view() === 'model') {
+  <div class="panel-bar">
+    <span class="muted small">Generated from the diagram on every change — this is the file given to nuXmv.</span>
+    <span class="spacer"></span>
+    <button type="button" (click)="copy()" [disabled]="!store.generated().text">{{ copied() ? 'Copied' : 'Copy' }}</button>
+    <button type="button" (click)="download()" [disabled]="!store.generated().text">Download {{ fileBase() }}.smv</button>
+  </div>
+  @if (store.generated().error) {
+    <p class="muted pad">{{ store.generated().error }}</p>
+  } @else {
+    @for (note of store.generated().notes; track $index) {
+      <p class="muted small pad-x">Note: {{ note }}</p>
+    }
+    <pre class="code">{{ store.generated().text }}</pre>
+  }
+} @else {
+  @if (store.verification(); as v) {
+    <div class="panel-bar">
+      <span class="mono small">{{ v.command }}</span>
+      <span class="spacer"></span>
+      @if (v.exitCode !== undefined) { <span class="muted small">exit code {{ v.exitCode }}</span> }
+      <label class="inline small"><input type="checkbox" [checked]="showBanner()" (change)="showBanner.set($any($event.target).checked)" /> banner</label>
+    </div>
+    @for (w of v.warnings; track $index) {
+      <p class="warning-text mono small pad-x">{{ w }}</p>
+    }
+    <pre class="code">{{ consoleText() || (v.running ? 'Running…' : '(no output)') }}</pre>
+  } @else {
+    <p class="muted pad">nuXmv has not been run yet.</p>
+  }
+}

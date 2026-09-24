@@ -1,0 +1,17 @@
+node_modules/
+dist/
+out/
+.angular/
+coverage/
+*.log
+.DS_Store
+.env
+*.tsbuildinfo
+# nuXmv binaries are licensed separately and must not be committed
+nuXmv-*-linux64/
+nuXmv-*-macos64/
+nuXmv-*-win64/
+*.tar.xz
+# Local copy of the original dissertation
+MscDissertationFinalFinal.pdf
+.claude/
