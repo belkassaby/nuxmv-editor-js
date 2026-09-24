@@ -1,0 +1,35 @@
+// Reflection & critique loop with a retry budget of 2 refinements.
+// The evaluator's verdict (pass / fail) is left to nuXmv: both are explored.
+diagram AgentReflectionLoop
+
+attributes {
+  phase      : { drafting, critiquing, refining, approved, failed };
+  loop_count : 0..3;   // the domain allows 3; the invariant proves no 3rd refinement
+}
+
+initial state drafting "draft" { phase = drafting, loop_count = 0 } at (80, 60)
+state critique0 "critique #1" { phase = critiquing, loop_count = 0 } at (300, 60)
+state refine1 "refine #1" { phase = refining, loop_count = 1 } at (520, 60)
+state critique1 "critique #2" { phase = critiquing, loop_count = 1 } at (520, 220)
+state refine2 "refine #2" { phase = refining, loop_count = 2 } at (300, 220)
+state critique2 "critique #3" { phase = critiquing, loop_count = 2 } at (80, 220)
+state approved "approved" { phase = approved } at (300, 380)
+state failed "max retries" { phase = failed, loop_count = 2 } at (80, 380)
+
+drafting -> critique0;
+critique0 -> approved : "passes_eval";
+critique0 -> refine1 : "fails_eval";
+refine1 -> critique1;
+critique1 -> approved : "passes_eval";
+critique1 -> refine2 : "fails_eval";
+refine2 -> critique2;
+critique2 -> approved : "passes_eval";
+critique2 -> failed : "fails_eval";
+approved -> approved;
+failed -> failed;
+
+LTLSPEC NAME terminates := F (phase = approved | phase = failed);
+LTLSPEC NAME always_approved := F phase = approved;
+INVARSPEC NAME retry_budget := phase = refining -> loop_count <= 2;
+CTLSPEC NAME approval_possible := AG (phase = critiquing -> EX phase = approved);
+CTLSPEC NAME no_dead_ends := AG EX TRUE;

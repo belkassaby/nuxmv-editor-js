@@ -55,6 +55,150 @@ developments" and removes the limitations listed in its evaluation chapter.
 | Must restart the tool to try another diagram                | New/Open/Examples at any time                                 |
 | Hard-coded paths                                            | `NUXMV_PATH` environment variable                             |
 
+## Designing and verifying agentic LLM systems
+
+Execution frameworks such as XState, LangGraph or Temporal *run* an agent. This project is used
+earlier, at design time: you describe the agent's control flow as a finite state machine and let
+nuXmv explore **every** decision the LLM could make. You find infinite loops, bypassed guardrails,
+steps taken out of order and unreachable states before writing or deploying the agent.
+
+```
+ 1. Model the FSM ──▶ 2. Write properties ──▶ 3. Check with nuXmv ──▶ 4. Fix from counterexamples ──┐
+        ▲                                                                                            │
+        └────────────────────────────────────────── repeat until every property holds ◀─────────────┘
+                                                               │
+                                     5. Implement the verified FSM in your runtime and keep checking it in CI
+```
+
+### Step 1: Inventory the agent's states and decisions
+
+List the control states of the agent: each XState state, LangGraph node or workflow step becomes a
+`state`. Then list every way of leaving a state: LLM outputs (answer or tool call, pass or fail,
+which specialist to route to), tool outcomes (success or error), and human events (approve or deny).
+Each outcome becomes a transition.
+
+### Step 2: Model LLM uncertainty as nondeterminism
+
+Do not try to predict what the model will do. When a state has several outgoing transitions and no
+guard, nuXmv treats the choice as free and checks all of them. That is the right abstraction for an
+LLM: a property that holds proves the design is safe *whatever the model decides*. Transition labels
+(`: "fails_eval"`) document the decision but do not restrict it.
+
+### Step 3: Choose the atoms your properties need
+
+Attributes label the states with the facts you want to reason about: the phase, whether a tool is
+running, whether a human is being waited on, which agent is active. Two rules keep models faithful:
+
+- **Bound every counter and unroll it into the states.** A `retry < max` guard is modelled as one
+  state per retry (`critique0`, `critique1`, …) with `loop_count` set in each. Without this, the
+  model contains the unbounded loop and termination fails (see below).
+- **Give terminal states a self-loop** (`done -> done;`). nuXmv reasons about infinite paths; a state
+  without a successor is reported as a dead end and made to stutter.
+
+Example: a reflection loop with a budget of two refinements (`examples/agent-reflection-loop.nxd`,
+also under *Examples → Agentic AI patterns*):
+
+```
+diagram AgentReflectionLoop
+
+attributes {
+  phase      : { drafting, critiquing, refining, approved, failed };
+  loop_count : 0..3;   // the domain allows 3; the invariant proves no 3rd refinement
+}
+
+initial state drafting "draft" { phase = drafting, loop_count = 0 }
+state critique0 "critique #1" { phase = critiquing, loop_count = 0 }
+state refine1 "refine #1" { phase = refining, loop_count = 1 }
+state critique1 "critique #2" { phase = critiquing, loop_count = 1 }
+state refine2 "refine #2" { phase = refining, loop_count = 2 }
+state critique2 "critique #3" { phase = critiquing, loop_count = 2 }
+state approved "approved" { phase = approved }
+state failed "max retries" { phase = failed, loop_count = 2 }
+
+drafting -> critique0;
+critique0 -> approved : "passes_eval";
+critique0 -> refine1 : "fails_eval";
+refine1 -> critique1;
+critique1 -> approved : "passes_eval";
+critique1 -> refine2 : "fails_eval";
+refine2 -> critique2;
+critique2 -> approved : "passes_eval";
+critique2 -> failed : "fails_eval";
+approved -> approved;
+failed -> failed;
+```
+
+### Step 4: Write the properties the agent must satisfy
+
+Properties refer to attribute values, or to the current state through the `state` variable
+(`state = critique0`). Labels in quotes are not names. These templates cover most agent designs:
+
+| Goal | Formula | Reads as |
+| --- | --- | --- |
+| Termination | `LTLSPEC F (phase = approved \| phase = failed)` | Every run ends in a terminal state, whatever the evaluator says |
+| Goal always reached | `LTLSPEC F phase = approved` | Every run ends approved (false here: repeated rejections end in `failed`) |
+| Bounded retries | `INVARSPEC phase = refining -> loop_count <= 2` | No state ever starts a third refinement |
+| Progress possible | `CTLSPEC AG (phase = critiquing -> EX phase = approved)` | From every critique, some next step approves |
+| Recovery | `CTLSPEC AG EF state = idle` | From every reachable state, a path back to `idle` exists |
+| Guardrail | `CTLSPEC AG (!awaiting_human -> AX !tool_active)` | A tool can only start right after a human approval step |
+| Step ordering | `LTLSPEC !(agent = meal_prep) U agent = recipe` | No meal preparation before a recipe has been written |
+| Dead code | `CTLSPEC EF state = done` | `done` can be reached at all (false reveals an unreachable state) |
+| No deadlock | `CTLSPEC AG EX TRUE` | Every reachable state has a successor |
+
+`G` = always, `F` = eventually, `X` = next, `U` = until on the single run (LTL); `A`/`E` = on all /
+some paths, combined as `AG`, `EF`, `AX`, … (CTL). The editor checks the syntax as you type and
+rejects CTL operators inside an `LTLSPEC` (and the reverse).
+
+### Step 5: Check, read the counterexample, fix the design
+
+Press **Check**. Properties that hold get ✓. For each ✗, open **Counterexample**: the offending run
+is highlighted on the diagram, step by step, with the loop of a lasso-shaped trace drawn dashed.
+Typical fixes are adding a budget, a human checkpoint, a missing error transition or a terminal
+state, or replacing an LLM router by a fixed sequence. The *Orchestration* and *Collaboration*
+examples show that last fix and its effect on the verdicts.
+
+The same model **without** the retry budget shows why Step 3 matters:
+
+```
+initial state drafting { phase = drafting }
+state critiquing { phase = critiquing }
+state refining { phase = refining }
+state approved { phase = approved }
+drafting -> critiquing;
+critiquing -> approved : "passes_eval";
+critiquing -> refining : "fails_eval";
+refining -> critiquing;
+approved -> approved;
+
+LTLSPEC F phase = approved;            -- false: critiquing -> refining -> critiquing ... forever
+CTLSPEC AG EF phase = approved;        -- true: approval is always *possible*, never guaranteed
+```
+
+Use **BDD** to prove properties, **BMC** to find short counterexamples fast in large models, and
+**IC3** for invariants and LTL on models too large for BDDs. Use **Simulate** to walk the design
+by hand when a trace needs more context.
+
+### Step 6: Implement the verified FSM and keep it verified
+
+Nothing is generated for you. Implement the verified design in your runtime with the same states
+and transitions: in XState each `state` becomes a state node and each transition an `onDone`/`on`
+target with its guard. Keep the `.nxd` file next to the code as its specification, and re-check it
+in CI whenever the agent's flow changes:
+
+```sh
+NUXMV_PATH=/opt/nuXmv/bin/nuXmv npx nxd check agent.nxd   # exit 0: all hold, 3: a property is false, 1: error
+```
+
+For a CI gate, keep only must-hold properties in the checked file. Properties that are false by
+design, such as `always_approved` above, make the exit code 3.
+
+### What is and is not verified
+
+nuXmv proves properties of the **model**: the control flow and every possible LLM decision. It does
+not check what the LLM writes, nor that your implementation matches the diagram. Keep the two in
+sync (one code state per diagram state is the simplest way), and keep the facts you care about,
+such as approvals, counters and the active agent, as attributes so they can be checked.
+
 ## Architecture
 
 ```
@@ -254,6 +398,7 @@ nondeterministic transitions, so nuXmv checks every possible choice the model co
 | -------------------------------- | ------------------------------------------------------------------------------------ |
 | Writer with tool use             | Tool results always return to the writer, but the LLM can call the tool forever       |
 | Reflection (bounded)             | With the loop counter unrolled, termination is proved                                |
+| Reflection loop with retry budget | Always terminates, but can end in `failed` after two rejected refinements             |
 | Human-in-the-loop tool approval  | No tool runs without approval; repeated denials can prevent completion               |
 | Orchestration (LLM router)       | The router can prepare the meal before any recipe exists (counterexample)            |
 | Collaboration (fixed pipeline)   | The same agents in a fixed sequence satisfy the ordering and termination properties  |
