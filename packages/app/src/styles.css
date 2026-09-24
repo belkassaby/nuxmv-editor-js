@@ -185,3 +185,23 @@ dialog.help h2 { margin: 0; font-size: 17px; }
 dialog.help h3 { font-size: 14px; margin: 16px 0 6px; }
 .help-body { padding: 0 16px 16px; line-height: 1.55; }
 .help-body ul, .help-body ol { padding-left: 20px; margin: 4px 0; }
+
+/* ------------------------------------------------------- logic reference */
+dialog.help { width: min(900px, calc(100vw - 32px)); }
+dialog.help header { gap: 12px; flex-wrap: wrap; }
+.help-tabs { display: flex; gap: 2px; flex: 1; flex-wrap: wrap; }
+.help-tabs button { border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: none; color: var(--muted); padding: 6px 10px; }
+.help-tabs button.active { color: var(--text); border-bottom-color: var(--accent); font-weight: 600; }
+.help-search { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; padding: 10px 16px 0; }
+.help-search input { flex: 1; min-width: 200px; }
+dialog.help a { color: var(--accent); }
+table.symbols { width: 100%; margin-bottom: 8px; }
+table.symbols td { white-space: normal; vertical-align: top; }
+table.symbols td.mono { white-space: nowrap; }
+table.symbols td.sym { font-family: 'STIX Two Math', 'Cambria Math', 'Latin Modern Math', serif; font-size: 16px; white-space: nowrap; }
+dl.glossary dt { font-weight: 600; margin-top: 12px; }
+dl.glossary dd { margin: 2px 0 0; }
+code.example { display: block; margin-top: 4px; padding: 3px 8px; background: var(--canvas-bg); border: 1px solid var(--border); border-radius: 4px; width: fit-content; max-width: 100%; }
+ul.refs { list-style: none; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+h4.with-help { display: flex; gap: 10px; align-items: baseline; }
+h4.with-help button.link { text-transform: none; letter-spacing: 0; font-family: var(--sans); font-weight: 500; }

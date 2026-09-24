@@ -1,18 +1,68 @@
-import { Component, ElementRef, viewChild } from '@angular/core';
+import { Component, computed, ElementRef, inject, signal, viewChild } from '@angular/core';
+import { HelpService } from './help.service';
+import { GLOSSARY, REFERENCES, SYMBOLS } from './logic-reference';
 
-/** Help window, after the two help dialogs of JungToNusmv (Appendix A). */
+export type HelpSection = 'guide' | 'symbols' | 'glossary' | 'references';
+
+/**
+ * Help window, after the two help dialogs of JungToNusmv (Appendix A), plus
+ * a reference of symbolic logic notation and terms.
+ */
 @Component({
     selector: 'app-help-dialog',
     templateUrl: './help-dialog.html'
 })
 export class HelpDialog {
     private readonly dialog = viewChild.required<ElementRef<HTMLDialogElement>>('dialog');
+    readonly section = signal<HelpSection>('guide');
+    readonly query = signal('');
+    readonly references = REFERENCES;
+    readonly sections: Array<{ id: HelpSection; label: string }> = [
+        { id: 'guide', label: 'Using the editor' },
+        { id: 'symbols', label: 'Logic symbols' },
+        { id: 'glossary', label: 'Glossary' },
+        { id: 'references', label: 'References' }
+    ];
 
-    open(): void {
-        this.dialog().nativeElement.showModal();
+    readonly symbols = computed(() => {
+        const q = this.query().trim().toLowerCase();
+        return SYMBOLS.filter(s => !q || [s.symbol, s.syntax, s.name, s.meaning, s.logic].some(t => t.toLowerCase().includes(q)));
+    });
+
+    readonly symbolGroups = computed(() =>
+        (['Propositional', 'LTL', 'CTL', 'Meta'] as const)
+            .map(logic => ({ logic, items: this.symbols().filter(s => s.logic === logic) }))
+            .filter(g => g.items.length > 0)
+    );
+
+    readonly glossary = computed(() => {
+        const q = this.query().trim().toLowerCase();
+        return GLOSSARY.filter(g => !q || [g.term, g.aka ?? '', g.definition, g.example ?? ''].some(t => t.toLowerCase().includes(q)));
+    });
+
+    readonly groupTitles: Record<string, string> = {
+        Propositional: 'Propositional connectives',
+        LTL: 'LTL — linear time operators (one path)',
+        CTL: 'CTL — branching time operators (tree of paths)',
+        Meta: 'Notation used to talk about models'
+    };
+
+    constructor() {
+        inject(HelpService).dialog = this;
+    }
+
+    open(section: HelpSection = 'guide'): void {
+        this.section.set(section);
+        this.query.set('');
+        const dialog = this.dialog().nativeElement;
+        if (!dialog.open) dialog.showModal();
     }
 
     close(): void {
         this.dialog().nativeElement.close();
+    }
+
+    show(section: HelpSection): void {
+        this.section.set(section);
     }
 }

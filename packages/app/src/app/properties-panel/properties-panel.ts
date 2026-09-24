@@ -1,6 +1,7 @@
 import { Component, computed, inject } from '@angular/core';
 import type { FairnessKind, SpecKind } from '@nuxmv-editor/language';
 import { DiagramStore } from '../diagram-store';
+import { HelpService } from '../help-dialog/help.service';
 import { ENGINE_LABELS, NuxmvApi, type Engine } from '../nuxmv-api';
 
 /** Temporal properties, fairness constraints, and their verification results. */
@@ -11,6 +12,7 @@ import { ENGINE_LABELS, NuxmvApi, type Engine } from '../nuxmv-api';
 export class PropertiesPanel {
     readonly store = inject(DiagramStore);
     readonly api = inject(NuxmvApi);
+    readonly help = inject(HelpService);
     readonly engines = Object.entries(ENGINE_LABELS) as Array<[Engine, string]>;
     readonly kinds: SpecKind[] = ['LTLSPEC', 'CTLSPEC', 'INVARSPEC'];
     readonly fairnessKinds: FairnessKind[] = ['FAIRNESS', 'JUSTICE'];

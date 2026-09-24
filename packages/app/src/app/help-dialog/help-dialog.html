@@ -1,8 +1,23 @@
 <dialog #dialog class="help" (click)="$event.target === dialog && close()">
   <header>
-    <h2>Using the nuXmv diagram editor</h2>
+    <h2>Help</h2>
+    <nav class="help-tabs" role="tablist">
+      @for (t of sections; track t.id) {
+        <button type="button" role="tab" [class.active]="section() === t.id" [attr.aria-selected]="section() === t.id" (click)="show(t.id)">{{ t.label }}</button>
+      }
+    </nav>
     <button type="button" class="icon" (click)="close()" aria-label="Close help">×</button>
   </header>
+  @if (section() === 'symbols' || section() === 'glossary') {
+    <div class="help-search">
+      <input type="search" placeholder="Search symbols and terms…" [value]="query()" (input)="query.set($any($event.target).value)" aria-label="Search" />
+      <span class="muted small">
+        Nomenclature: <a href="https://en.wikipedia.org/wiki/List_of_logic_symbols" target="_blank" rel="noopener">List of logic symbols ↗</a>
+      </span>
+    </div>
+  }
+  @switch (section()) {
+  @case ('guide') {
   <div class="help-body">
     <section>
       <h3>Workflow</h3>
@@ -56,5 +71,67 @@ INVARSPEC level &lt;= 3;</pre>
         <li><strong>IC3</strong>: SAT-based proofs of invariants and LTL properties; CTL is still checked with BDDs.</li>
       </ul>
     </section>
+    <section>
+      <h3>Logic reference</h3>
+      <p>New to temporal logic? See the <button type="button" class="link" (click)="show('symbols')">logic symbols</button>,
+        the <button type="button" class="link" (click)="show('glossary')">glossary</button> and the
+        <button type="button" class="link" (click)="show('references')">references</button>, including the
+        <a href="https://en.wikipedia.org/wiki/List_of_logic_symbols" target="_blank" rel="noopener">nomenclature of logic symbols ↗</a>.</p>
+    </section>
   </div>
+  }
+  @case ('symbols') {
+  <div class="help-body">
+    <p class="muted">Textbook notation, how to write it in this editor (nuXmv syntax), and what it means. p and q stand for any formula.</p>
+    @for (g of symbolGroups(); track g.logic) {
+      <h3>{{ groupTitles[g.logic] }}</h3>
+      <table class="grid symbols">
+        <thead><tr><th>Symbol</th><th>Write</th><th>Name</th><th>Meaning</th></tr></thead>
+        <tbody>
+          @for (s of g.items; track s.symbol) {
+            <tr>
+              <td class="sym">{{ s.symbol }}</td>
+              <td class="mono">{{ s.syntax || '—' }}</td>
+              <td>{{ s.name }}</td>
+              <td>{{ s.meaning }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    } @empty {
+      <p class="muted">No symbol matches “{{ query() }}”.</p>
+    }
+    <p class="muted small">The editor parses operators in this order, tightest first: <span class="mono">! and unary temporal operators &nbsp; * / mod &nbsp; + - &nbsp; = != &lt; &gt; &lt;= &gt;= &nbsp; U V &nbsp; &amp; &nbsp; | xor xnor &nbsp; &lt;-&gt; &nbsp; -&gt;</span>.
+      The formula is passed to nuXmv exactly as written, and nuXmv applies its own precedence rules (see the <a href="https://nusmv.fbk.eu/userman/v27/nusmv.pdf" target="_blank" rel="noopener">user manual ↗</a>). When in doubt, add parentheses.</p>
+  </div>
+  }
+  @case ('glossary') {
+  <div class="help-body">
+    <dl class="glossary">
+      @for (g of glossary(); track g.term) {
+        <dt>{{ g.term }} @if (g.aka) { <span class="muted small">({{ g.aka }})</span> }</dt>
+        <dd>
+          {{ g.definition }}
+          @if (g.example) { <code class="example">{{ g.example }}</code> }
+        </dd>
+      } @empty {
+        <p class="muted">No term matches “{{ query() }}”.</p>
+      }
+    </dl>
+  </div>
+  }
+  @case ('references') {
+  <div class="help-body">
+    <ul class="refs">
+      @for (r of references; track r.url) {
+        <li>
+          <a [href]="r.url" target="_blank" rel="noopener">{{ r.title }} ↗</a>
+          <div class="muted small">{{ r.note }}</div>
+        </li>
+      }
+    </ul>
+    <p class="muted small">Textbook: M. Huth and M. Ryan, <em>Logic in Computer Science: Modelling and Reasoning about Systems</em>, 2nd ed., Cambridge University Press, 2004 (chapter 3 covers LTL, CTL and model checking with NuSMV).</p>
+  </div>
+  }
+  }
 </dialog>

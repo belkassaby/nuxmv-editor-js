@@ -4,7 +4,7 @@ import { AttributeTable } from './attribute-table/attribute-table';
 import { DiagramCanvas } from './diagram-canvas/diagram-canvas';
 import { DiagramStore } from './diagram-store';
 import { downloadText, pickFile } from './file-io';
-import { HelpDialog } from './help-dialog/help-dialog';
+import { HelpDialog, type HelpSection } from './help-dialog/help-dialog';
 import { Inspector } from './inspector/inspector';
 import { NuxmvApi } from './nuxmv-api';
 import { OutputPanel } from './output-panel/output-panel';
@@ -141,8 +141,8 @@ export class App implements OnInit {
         this.tab.set('trace');
     }
 
-    openHelp(): void {
-        this.help().open();
+    openHelp(section: HelpSection = 'guide'): void {
+        this.help().open(section);
     }
 
     reveal(offset: number): void {

@@ -38,6 +38,10 @@ developments" and removes the limitations listed in its evaluation chapter.
 - **Counterexamples.** A lasso trace is shown both on the graph and as a table of variable values,
   with the steps and the start of the loop marked. You can step through it or play it.
 - **Simulation.** Walk through the model by clicking successor states, or take random steps.
+- **Logic help.** The Help menu explains every symbol of propositional, LTL and CTL logic (textbook
+  notation, how to write it here, meaning), has a searchable glossary of model checking terms, and
+  links to references, including the
+  [nomenclature of logic symbols](https://en.wikipedia.org/wiki/List_of_logic_symbols).
 - **Files.** Save and open `.nxd` files, export the `.smv` model, import the legacy
   `attributeData.txt` format, and load four built-in examples.
 

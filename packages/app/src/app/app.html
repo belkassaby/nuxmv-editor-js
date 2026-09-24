@@ -55,7 +55,17 @@
       }
     </div>
     <div class="menu">
-      <button type="button" (click)="openHelp()">Help</button>
+      <button type="button" (click)="toggleMenu('help', $event)" [attr.aria-expanded]="openMenu() === 'help'">Help</button>
+      @if (openMenu() === 'help') {
+        <div class="menu-list" role="menu">
+          <button type="button" role="menuitem" (click)="openHelp('guide')">Using the editor</button>
+          <hr />
+          <button type="button" role="menuitem" (click)="openHelp('symbols')">Logic symbols (¬ ∧ □ ◇ AG EF …)</button>
+          <button type="button" role="menuitem" (click)="openHelp('glossary')">Glossary of logic terms</button>
+          <button type="button" role="menuitem" (click)="openHelp('references')">References</button>
+          <a class="menu-link" role="menuitem" href="https://en.wikipedia.org/wiki/List_of_logic_symbols" target="_blank" rel="noopener">Nomenclature of logic symbols ↗</a>
+        </div>
+      }
     </div>
   </nav>
   <span class="spacer"></span>
