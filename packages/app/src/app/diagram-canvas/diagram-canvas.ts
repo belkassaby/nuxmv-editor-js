@@ -363,6 +363,8 @@ const STYLE: StylesheetJson = [
             'control-point-step-size': 50
         }
     },
+    // Self-loops must clear the node, which widens with long labels.
+    { selector: 'edge:loop', style: { 'control-point-step-size': (e: EdgeSingular) => Math.max(50, e.source().width() * 0.4) } },
     { selector: 'edge:selected', style: { width: 3.5, 'line-color': () => css('--accent', '#2f6fdf'), 'target-arrow-color': () => css('--accent', '#2f6fdf') } },
     { selector: '.dim', style: { opacity: 0.25 } },
     { selector: 'node.visited', style: { 'background-color': () => css('--trace-visited', '#fde9c9') } },

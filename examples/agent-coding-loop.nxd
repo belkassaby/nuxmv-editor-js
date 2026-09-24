@@ -1,53 +1,115 @@
-// Developer-led agentic coding loop (after agentic_coding_fsm_guide.pdf).
-// The agent designs, codes and self-heals against the test suite, but a
-// human gates the plan and the code review. The retry budget of the Python
-// scaffold (max_test_retries = 3) is unrolled into the states:
-// developing_k / testing_k hold test_failures = k.
+// Developer-led agentic coding loop with agent reviews and a human-gated release
+// (after agentic_coding_fsm_guide.pdf).
+//
+// 1. Build: an agent designs and codes; the test suite drives up to two
+//    self-healing retries (max_test_retries = 3 of the guide's Python scaffold,
+//    unrolled into developing_k / testing_k, k = test_failures).
+// 2. Review: a security review agent, then a quality review agent. Either may
+//    request changes once (one bounded rework round); a second rejection
+//    escalates to the human. The human then reviews the git diff and merges.
+// 3. Release: the pipeline builds, deploys to staging and runs smoke tests;
+//    the human decides whether the release goes to production, is held, or is
+//    rejected. A failed production health check rolls back to the human.
+//
 // Unlike the guide's Python scaffold, which never resets test_failures after
-// escalating (a second request would escalate on its first failure), the
-// counter restarts at 0 when the loop returns to PROMPTING.
+// escalating, counters restart at 0 when the loop returns to PROMPTING.
 diagram AgenticCodingLoop
 
 attributes {
-  phase         : { prompting, designing, developing, testing, code_review, deployed };
-  test_failures : 0..3;   // the domain allows 3; the invariant proves it never gets there
+  phase : { prompting, designing, developing, testing, agent_review, human_review, merged,
+            building, staging, smoke_testing, release_decision, on_hold, deploying, live, rolled_back };
+  actor              : { human, agent, pipeline };
+  reviewer           : { none, security_agent, quality_agent, human };
+  test_failures      : 0..3;   // the domains allow 3; the invariants prove neither gets there
+  agent_review_round : 0..3;   // 0 = not in agent review
 }
 
-initial state prompting "human prompt" { phase = prompting, test_failures = 0 } at (80, 200)
-state designing "agent plans, human reviews" { phase = designing, test_failures = 0 } at (260, 80)
-state developing0 "agent codes" { phase = developing, test_failures = 0 } at (460, 80)
-state testing0 "tests run" { phase = testing, test_failures = 0 } at (660, 80)
-state developing1 "self-heal #1" { phase = developing, test_failures = 1 } at (660, 240)
-state testing1 "tests run #2" { phase = testing, test_failures = 1 } at (860, 240)
-state developing2 "self-heal #2" { phase = developing, test_failures = 2 } at (860, 400)
-state testing2 "tests run #3" { phase = testing, test_failures = 2 } at (660, 400)
-state code_review "human git diff review" { phase = code_review, test_failures = 0 } at (460, 400)
-state deployed "merged" { phase = deployed, test_failures = 0 } at (260, 400)
+// ---- 1. Build ------------------------------------------------------------------
+initial state prompting "human prompt" { phase = prompting, actor = human, reviewer = none, test_failures = 0, agent_review_round = 0 } at (100, 80)
+state designing "agent plans, human reviews" { phase = designing, actor = agent, reviewer = none, test_failures = 0, agent_review_round = 0 } at (360, 80)
+state developing0 "agent codes" { phase = developing, actor = agent, reviewer = none, test_failures = 0, agent_review_round = 0 } at (620, 80)
+state testing0 "tests run" { phase = testing, actor = pipeline, reviewer = none, test_failures = 0, agent_review_round = 0 } at (880, 80)
+state developing1 "self-heal #1" { phase = developing, actor = agent, reviewer = none, test_failures = 1, agent_review_round = 0 } at (1140, 80)
+state testing1 "tests run #2" { phase = testing, actor = pipeline, reviewer = none, test_failures = 1, agent_review_round = 0 } at (1400, 80)
+state developing2 "self-heal #2" { phase = developing, actor = agent, reviewer = none, test_failures = 2, agent_review_round = 0 } at (1400, 220)
+state testing2 "tests run #3" { phase = testing, actor = pipeline, reviewer = none, test_failures = 2, agent_review_round = 0 } at (1140, 220)
+
+// ---- 2. Review -----------------------------------------------------------------
+state security_review1 "security agent review" { phase = agent_review, actor = agent, reviewer = security_agent, test_failures = 0, agent_review_round = 1 } at (880, 380)
+state quality_review1 "quality agent review" { phase = agent_review, actor = agent, reviewer = quality_agent, test_failures = 0, agent_review_round = 1 } at (1140, 380)
+state rework_developing "agent reworks review findings" { phase = developing, actor = agent, reviewer = none, test_failures = 0, agent_review_round = 1 } at (560, 520)
+state rework_testing "tests run after rework" { phase = testing, actor = pipeline, reviewer = none, test_failures = 0, agent_review_round = 1 } at (860, 520)
+state security_review2 "security agent re-review" { phase = agent_review, actor = agent, reviewer = security_agent, test_failures = 0, agent_review_round = 2 } at (1140, 520)
+state quality_review2 "quality agent re-review" { phase = agent_review, actor = agent, reviewer = quality_agent, test_failures = 0, agent_review_round = 2 } at (1400, 520)
+state human_review "human git diff review" { phase = human_review, actor = human, reviewer = human, test_failures = 0, agent_review_round = 0 } at (1400, 380)
+state merged "PR merged" { phase = merged, actor = pipeline, reviewer = none, test_failures = 0, agent_review_round = 0 } at (1400, 680)
+
+// ---- 3. Release ----------------------------------------------------------------
+state building "build release candidate" { phase = building, actor = pipeline, reviewer = none, test_failures = 0, agent_review_round = 0 } at (1140, 680)
+state staging "deploy to staging" { phase = staging, actor = pipeline, reviewer = none, test_failures = 0, agent_review_round = 0 } at (880, 680)
+state smoke_testing "staging smoke tests" { phase = smoke_testing, actor = pipeline, reviewer = none, test_failures = 0, agent_review_round = 0 } at (620, 680)
+state release_decision "human: release?" { phase = release_decision, actor = human, reviewer = none, test_failures = 0, agent_review_round = 0 } at (360, 680)
+state on_hold "release held" { phase = on_hold, actor = human, reviewer = none, test_failures = 0, agent_review_round = 0 } at (100, 680)
+state deploying "deploy to production" { phase = deploying, actor = pipeline, reviewer = none, test_failures = 0, agent_review_round = 0 } at (360, 820)
+state live "live in production" { phase = live, actor = pipeline, reviewer = none, test_failures = 0, agent_review_round = 0 } at (620, 820)
+state rolled_back "rolled back" { phase = rolled_back, actor = pipeline, reviewer = none, test_failures = 0, agent_review_round = 0 } at (100, 820)
 
 prompting -> designing : "USER_SUBMIT";
 designing -> developing0 : "PLAN_ACCEPTED";
 designing -> prompting : "human_clarifies";
 developing0 -> testing0 : "CODE_WRITTEN";
-testing0 -> code_review : "TESTS_PASSED";
+testing0 -> security_review1 : "TESTS_PASSED";
 testing0 -> developing1 : "TESTS_FAILED";
 developing1 -> testing1 : "CODE_WRITTEN";
-testing1 -> code_review : "TESTS_PASSED";
+testing1 -> security_review1 : "TESTS_PASSED";
 testing1 -> developing2 : "TESTS_FAILED";
 developing2 -> testing2 : "CODE_WRITTEN";
-testing2 -> code_review : "TESTS_PASSED";
+testing2 -> security_review1 : "TESTS_PASSED";
 testing2 -> prompting : "max_retries_reached";
-code_review -> deployed : "human_approved";
-code_review -> prompting : "human_rejected";
-code_review -> designing : "redesign";
-deployed -> deployed;
 
-// Guardrails: code is only deployed after a human review of tested code.
-LTLSPEC NAME reviewed_before_deploy := G (phase = deployed -> O phase = code_review);
-LTLSPEC NAME tested_before_review := G (phase = code_review -> Y phase = testing);
-LTLSPEC NAME human_gate := G (phase = deployed & Y phase != deployed -> Y phase = code_review);
-// The self-healing loop is bounded: every coding round ends in review or escalation.
-LTLSPEC NAME bounded_self_healing := G (phase = developing -> F (phase = code_review | phase = prompting));
+security_review1 -> quality_review1 : "security_approved";
+security_review1 -> rework_developing : "changes_requested";
+quality_review1 -> human_review : "quality_approved";
+quality_review1 -> rework_developing : "changes_requested";
+rework_developing -> rework_testing : "CODE_WRITTEN";
+rework_testing -> security_review2 : "TESTS_PASSED";
+rework_testing -> prompting : "TESTS_FAILED: escalate";
+security_review2 -> quality_review2 : "security_approved";
+security_review2 -> prompting : "rejected again: escalate";
+quality_review2 -> human_review : "quality_approved";
+quality_review2 -> prompting : "rejected again: escalate";
+human_review -> merged : "human_approved";
+human_review -> prompting : "human_rejected";
+human_review -> designing : "redesign";
+
+merged -> building : "CI build";
+building -> staging : "build_ok";
+building -> prompting : "build_failed";
+staging -> smoke_testing : "deployed_to_staging";
+smoke_testing -> release_decision : "smoke_passed";
+smoke_testing -> prompting : "smoke_failed";
+release_decision -> deploying : "human_approves_release";
+release_decision -> on_hold : "human_holds";
+release_decision -> prompting : "human_rejects_release";
+on_hold -> release_decision : "human_revisits";
+deploying -> live : "health_ok";
+deploying -> rolled_back : "health_check_failed";
+rolled_back -> release_decision : "back to human";
+live -> live;
+
+// ---- Review guardrails -----------------------------------------------------------
+LTLSPEC NAME tested_before_agent_review := G (reviewer = security_agent -> Y phase = testing);
+LTLSPEC NAME security_then_quality := G (reviewer = quality_agent -> Y reviewer = security_agent);
+LTLSPEC NAME agents_before_human := G (phase = human_review -> Y reviewer = quality_agent);
+LTLSPEC NAME human_merges := G (phase = merged -> Y (phase = human_review & actor = human));
+INVARSPEC NAME review_rounds_bounded := agent_review_round <= 2;
 INVARSPEC NAME retry_budget := test_failures <= 2;
-// Deployment is always possible, but never guaranteed: the human may keep rejecting.
-CTLSPEC NAME can_deploy := AG EF phase = deployed;
-LTLSPEC NAME always_deploys := F phase = deployed;
+LTLSPEC NAME bounded_rework := G (phase = agent_review -> F (phase = human_review | phase = prompting));
+// ---- Release guardrails ------------------------------------------------------------
+LTLSPEC NAME human_decides_release := G (phase = deploying -> Y (phase = release_decision & actor = human));
+LTLSPEC NAME deploys_the_merged_change := G (phase = deploying -> (phase != prompting S phase = merged));
+LTLSPEC NAME staging_passed_for_this_release := G (phase = deploying -> (phase != prompting S phase = smoke_testing));
+LTLSPEC NAME rollback_goes_to_human := G (phase = rolled_back -> X phase = release_decision);
+// ---- Liveness: possible, not guaranteed ------------------------------------------------
+CTLSPEC NAME can_go_live := AG EF phase = live;
+LTLSPEC NAME always_goes_live := F phase = live;

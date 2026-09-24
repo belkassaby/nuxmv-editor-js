@@ -406,7 +406,7 @@ nondeterministic transitions, so nuXmv checks every possible choice the model co
 | Reflection loop with retry budget | Always terminates, but can end in `failed` after two rejected refinements             |
 | Human-in-the-loop tool approval  | No tool runs without approval; repeated denials can prevent completion               |
 | Orchestration (LLM router)       | The router can prepare the meal before any recipe exists (counterexample)            |
-| Agentic coding loop              | Nothing is deployed unreviewed or untested; self-healing is bounded; a human can still block deployment |
+| Agentic coding loop with reviews and release | Security and quality agents review before the human merges; only the tested, staged, merged change is deployed, and only on the human's release decision |
 | Educational agents               | Students only get instructor-approved content; two failures always escalate to the instructor, who can still block every plan |
 | Collaboration (fixed pipeline)   | The same agents in a fixed sequence satisfy the ordering and termination properties  |
 | Chat agent                       | The machine's `done` state is unreachable: dead code in the original definition      |
