@@ -3,6 +3,11 @@ import cytoscape, { type Core, type EdgeSingular, type ElementDefinition, type E
 import edgehandles from 'cytoscape-edgehandles';
 import type { DiagramModel } from '@nuxmv-editor/language';
 import { DiagramStore, type Highlight, type Selection } from '../diagram-store';
+import { downloadText } from '../file-io';
+import { computeLayout, LAYOUTS, type LayoutKind } from './layouts';
+import { cytoscapeToSvg } from './svg-export';
+
+const LAYOUT_KEY = 'nuxmv-editor.layout';
 
 cytoscape.use(edgehandles);
 
@@ -24,6 +29,9 @@ export class DiagramCanvas implements OnDestroy {
     readonly tooltip = signal<{ x: number; y: number; lines: string[] } | null>(null);
     readonly zoom = signal(1);
     readonly empty = computed(() => this.store.model().states.length === 0);
+    readonly layouts = LAYOUTS;
+    readonly layoutKind = signal<LayoutKind>(savedLayout());
+    readonly layingOut = signal(false);
 
     private cy?: Core;
     private eh?: EdgeHandlesInstance;
@@ -46,7 +54,7 @@ export class DiagramCanvas implements OnDestroy {
             });
         });
         effect(() => {
-            if (this.store.layoutRequests() > 0) untracked(() => this.autoLayout(true));
+            if (this.store.layoutRequests() > 0) untracked(() => void this.autoLayout(true));
         });
         effect(() => {
             const locked = this.store.hasSyntaxErrors();
@@ -71,7 +79,7 @@ export class DiagramCanvas implements OnDestroy {
         const cy = cytoscape({
             container: this.host().nativeElement,
             style: STYLE,
-            minZoom: 0.2,
+            minZoom: 0.02,
             maxZoom: 4,
             boxSelectionEnabled: true,
             selectionType: 'single'
@@ -175,7 +183,7 @@ export class DiagramCanvas implements OnDestroy {
 
         const allUnplaced = unplaced.length > 0 && unplaced.length === model.states.length;
         if (allUnplaced) {
-            this.autoLayout(false);
+            void this.autoLayout(false);
         } else if (this.fitPending && model.states.length > 0) {
             cy.fit(undefined, 40);
             if (cy.zoom() > 1.2) cy.zoom({ level: 1.2, renderedPosition: { x: cy.width() / 2, y: cy.height() / 2 } });
@@ -254,21 +262,38 @@ export class DiagramCanvas implements OnDestroy {
         this.store.moveStates(positions);
     }
 
-    autoLayout(save: boolean): void {
+    /** Arranges the states with the selected layout; `save` writes the positions into the text. */
+    async autoLayout(save: boolean): Promise<void> {
         const cy = this.cy;
-        if (!cy || cy.nodes().length === 0) return;
-        const roots = cy.nodes().filter(n => n.data('initial') === 1);
-        const layout = cy.layout({
-            name: 'breadthfirst',
-            directed: true,
-            roots: roots.length > 0 ? roots : undefined,
-            spacingFactor: 1.4,
-            padding: 40,
-            animate: save,
-            animationDuration: 300
-        } as cytoscape.LayoutOptions);
-        if (save) layout.one('layoutstop', () => this.savePositions());
-        layout.run();
+        if (!cy || cy.nodes().length === 0 || this.layingOut()) return;
+        this.layingOut.set(true);
+        try {
+            const positions = await computeLayout(cy, this.layoutKind(), STYLE, cy.width() / Math.max(1, cy.height()));
+            const layout = cy.layout({
+                name: 'preset',
+                positions: (n: NodeSingular) => positions[n.id()] ?? n.position(),
+                fit: true,
+                padding: 40,
+                animate: save,
+                animationDuration: 350
+            } as unknown as cytoscape.LayoutOptions);
+            const done = layout.promiseOn('layoutstop');
+            layout.run();
+            await done;
+            if (save) this.savePositions();
+        } finally {
+            this.layingOut.set(false);
+        }
+    }
+
+    setLayout(kind: string): void {
+        this.layoutKind.set(kind as LayoutKind);
+        try {
+            localStorage.setItem(LAYOUT_KEY, kind);
+        } catch {
+            // Storage unavailable (private mode): the choice lasts for this page only.
+        }
+        void this.autoLayout(true);
     }
 
     zoomBy(factor: number): void {
@@ -284,18 +309,41 @@ export class DiagramCanvas implements OnDestroy {
     exportPng(): void {
         const cy = this.cy;
         if (!cy) return;
-        const bg = getComputedStyle(this.host().nativeElement).getPropertyValue('--canvas-bg').trim() || '#ffffff';
-        const png = cy.png({ full: true, scale: 2, bg });
+        const png = cy.png({ full: true, scale: 2, bg: this.background() });
         const a = document.createElement('a');
         a.href = png;
-        a.download = this.store.fileName().replace(/\.nxd$/, '') + '.png';
+        a.download = this.baseName() + '.png';
         a.click();
+    }
+
+    exportSvg(): void {
+        const cy = this.cy;
+        if (!cy) return;
+        downloadText(this.baseName() + '.svg', cytoscapeToSvg(cy, this.background()), 'image/svg+xml');
+    }
+
+    private background(): string {
+        return getComputedStyle(this.host().nativeElement).getPropertyValue('--canvas-bg').trim() || '#ffffff';
+    }
+
+    private baseName(): string {
+        return this.store.fileName().replace(/\.nxd$/, '');
     }
 
     ngOnDestroy(): void {
         this.eh?.destroy();
         this.cy?.destroy();
     }
+}
+
+function savedLayout(): LayoutKind {
+    try {
+        const saved = localStorage.getItem(LAYOUT_KEY);
+        if (LAYOUTS.some(l => l.id === saved)) return saved as LayoutKind;
+    } catch {
+        // Storage unavailable: use the default.
+    }
+    return 'vertical';
 }
 
 interface EdgeHandlesInstance {
@@ -311,7 +359,7 @@ function longestLine(text: unknown): number {
 const css = (name: string, fallback: string) =>
     typeof document === 'undefined' ? fallback : getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
 
-const STYLE: StylesheetJson = [
+export const STYLE: StylesheetJson = [
     {
         selector: 'node',
         style: {

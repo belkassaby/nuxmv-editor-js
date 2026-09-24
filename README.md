@@ -26,8 +26,14 @@ developments" and removes the limitations listed in its evaluation chapter.
 - **Two synchronised views.** The text editor (CodeMirror, with Langium parsing and validation) and
   the drawing board (Cytoscape.js) edit the same model. Changes in one appear in the other.
 - **Diagram editing.** Select/move, add-state and add-transition modes, self-loops, box selection,
-  zoom and pan, automatic layout, and PNG export. Initial states have a double border and dead-end
-  states a dashed one.
+  zoom (down to 2%) and pan, and PNG or SVG (vector) export. Initial states have a double border and
+  dead-end states a dashed one.
+- **Layouts.** Pick one from the toolbar; the positions are saved into the text:
+  *Vertical* and *Horizontal* (layered, with dagre), *Spread* (tries dozens of layered, force-directed,
+  circular and hub layouts, keeps the one with the fewest crossing transitions and fewest transitions
+  running through other states, then improves it by swapping states), *Radial (hub)* (the most
+  connected state in the centre and the flow around it, compact enough for one screen),
+  *Force*, *Circle* and *Grid*.
 - **Atoms and attributes.** Boolean, enumerated and integer-range attributes, edited in a
   state × attribute table. A value left unset lets nuXmv choose any value in that state.
 - **Properties.** `LTLSPEC`, `CTLSPEC` and `INVARSPEC` (optionally named), plus `FAIRNESS` and

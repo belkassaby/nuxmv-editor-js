@@ -117,6 +117,10 @@ export class App implements OnInit {
         this.canvas()?.exportPng();
     }
 
+    exportSvg(): void {
+        this.canvas()?.exportSvg();
+    }
+
     loadExample(id: string): void {
         if (this.confirmDiscard()) this.store.loadExample(id);
     }

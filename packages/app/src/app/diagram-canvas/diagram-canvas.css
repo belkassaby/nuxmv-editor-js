@@ -13,3 +13,4 @@
 .lg.current { background: var(--trace-current); border-color: var(--trace-border); }
 .lg.visited { background: var(--trace-visited); }
 .banner { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); max-width: calc(100% - 32px); background: var(--warning-bg); color: var(--warning); border: 1px solid color-mix(in srgb, var(--warning) 40%, transparent); padding: 6px 12px; border-radius: 6px; font-size: 12px; z-index: 3; }
+.layout-pick { display: inline-flex; align-items: center; gap: 6px; }

@@ -14,8 +14,19 @@
   <button type="button" class="icon" (click)="zoomBy(1.2)" title="Zoom in" aria-label="Zoom in">+</button>
   <button type="button" class="icon" (click)="zoomBy(1 / 1.2)" title="Zoom out" aria-label="Zoom out">−</button>
   <button type="button" (click)="fit()" title="Fit the diagram in view">Fit</button>
-  <button type="button" (click)="store.requestLayout()" title="Arrange the states automatically">Layout</button>
+  <label class="layout-pick" title="Automatic layout: pick one to rearrange the states">
+    <span class="muted small">Layout</span>
+    <select (change)="setLayout($any($event.target).value)" [disabled]="layingOut()" aria-label="Layout">
+      @for (l of layouts; track l.id) {
+        <option [value]="l.id" [selected]="layoutKind() === l.id" [title]="l.title">{{ l.label }}</option>
+      }
+    </select>
+  </label>
+  <button type="button" (click)="autoLayout(true)" [disabled]="layingOut()" title="Apply the selected layout again">
+    @if (layingOut()) { <span class="spinner" aria-hidden="true"></span> } @else { ↻ }
+  </button>
   <button type="button" (click)="exportPng()" title="Download the diagram as PNG">PNG</button>
+  <button type="button" (click)="exportSvg()" title="Download the diagram as SVG (vector)">SVG</button>
 </div>
 <div class="cy-wrap">
   <div class="cy" #cy></div>
