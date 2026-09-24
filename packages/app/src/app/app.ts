@@ -10,14 +10,28 @@ import { NuxmvApi } from './nuxmv-api';
 import { OutputPanel } from './output-panel/output-panel';
 import { ProblemsList } from './problems-list/problems-list';
 import { PropertiesPanel } from './properties-panel/properties-panel';
+import { Splitter } from './splitter/splitter';
 import { TextEditor } from './text-editor/text-editor';
 import { TracePanel } from './trace-panel/trace-panel';
 
 type Tab = 'attributes' | 'properties' | 'trace' | 'model' | 'console';
 
+const SIZES_KEY = 'nuxmv-editor.pane-sizes';
+const DEFAULT_SIZES = { text: 440, inspector: 280, bottom: 320 };
+const MIN = { text: 220, inspector: 180, bottom: 120, canvasW: 320, canvasH: 200 };
+
+function loadSizes(): typeof DEFAULT_SIZES {
+    try {
+        const saved = JSON.parse(localStorage.getItem(SIZES_KEY) ?? '{}') as Partial<typeof DEFAULT_SIZES>;
+        return { ...DEFAULT_SIZES, ...saved };
+    } catch {
+        return { ...DEFAULT_SIZES };
+    }
+}
+
 @Component({
     selector: 'app-root',
-    imports: [AttributeTable, DiagramCanvas, HelpDialog, Inspector, OutputPanel, ProblemsList, PropertiesPanel, TextEditor, TracePanel],
+    imports: [AttributeTable, DiagramCanvas, HelpDialog, Inspector, OutputPanel, ProblemsList, PropertiesPanel, Splitter, TextEditor, TracePanel],
     templateUrl: './app.html',
     styleUrl: './app.css'
 })
@@ -29,6 +43,12 @@ export class App implements OnInit {
     readonly openMenu = signal<string | null>(null);
     readonly showText = signal(true);
     readonly message = signal<string | null>(null);
+    /** Pane sizes in pixels, set with the splitters. */
+    readonly textW = signal(loadSizes().text);
+    readonly inspectorW = signal(loadSizes().inspector);
+    readonly bottomH = signal(loadSizes().bottom);
+    /** The diagram fills the whole window. */
+    readonly canvasMax = signal(false);
     private readonly editor = viewChild(TextEditor);
     private readonly canvas = viewChild(DiagramCanvas);
     private readonly help = viewChild.required(HelpDialog);
@@ -56,6 +76,37 @@ export class App implements OnInit {
         void this.api.refreshStatus();
     }
 
+    // ------------------------------------------------------------- panes
+
+    resizeText(dx: number): void {
+        const others = this.inspectorW() + MIN.canvasW;
+        this.textW.set(clamp(this.textW() + dx, MIN.text, window.innerWidth - others));
+    }
+
+    resizeInspector(dx: number): void {
+        const others = (this.showText() ? this.textW() : 28) + MIN.canvasW;
+        this.inspectorW.set(clamp(this.inspectorW() - dx, MIN.inspector, window.innerWidth - others));
+    }
+
+    resizeBottom(dy: number): void {
+        this.bottomH.set(clamp(this.bottomH() - dy, MIN.bottom, window.innerHeight - 60 - MIN.canvasH));
+    }
+
+    resetSize(pane: 'text' | 'inspector' | 'bottom'): void {
+        if (pane === 'text') this.textW.set(DEFAULT_SIZES.text);
+        if (pane === 'inspector') this.inspectorW.set(DEFAULT_SIZES.inspector);
+        if (pane === 'bottom') this.bottomH.set(DEFAULT_SIZES.bottom);
+        this.saveSizes();
+    }
+
+    saveSizes(): void {
+        try {
+            localStorage.setItem(SIZES_KEY, JSON.stringify({ text: this.textW(), inspector: this.inspectorW(), bottom: this.bottomH() }));
+        } catch {
+            // Storage unavailable: sizes last for this page only.
+        }
+    }
+
     toggleMenu(name: string, event: Event): void {
         event.stopPropagation();
         this.openMenu.set(this.openMenu() === name ? null : name);
@@ -80,6 +131,7 @@ export class App implements OnInit {
         }
         if (event.key === 'Escape') {
             this.openMenu.set(null);
+            if (this.canvasMax() && !target.closest('dialog')) this.canvasMax.set(false);
             if (!typing) this.store.selection.set(null);
         }
     }
@@ -162,4 +214,8 @@ export class App implements OnInit {
         this.message.set(text);
         setTimeout(() => this.message() === text && this.message.set(null), 4000);
     }
+}
+
+function clamp(value: number, min: number, max: number): number {
+    return Math.round(Math.max(min, Math.min(Math.max(min, max), value)));
 }

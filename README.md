@@ -27,7 +27,8 @@ developments" and removes the limitations listed in its evaluation chapter.
   the drawing board (Cytoscape.js) edit the same model. Changes in one appear in the other.
 - **Diagram editing.** Select/move, add-state and add-transition modes, self-loops, box selection,
   zoom (down to 2%) and pan, and PNG or SVG (vector) export. Initial states have a double border and
-  dead-end states a dashed one.
+  dead-end states a dashed one. The panels around the diagram are resizable (drag the dividers;
+  sizes are remembered) and the diagram can be maximized to the whole window.
 - **Layouts.** Pick one from the toolbar; the positions are saved into the text:
   *Vertical* and *Horizontal* (layered, with dagre), *Spread* (tries dozens of layered, force-directed,
   circular and hub layouts, keeps the one with the fewest crossing transitions and fewest transitions

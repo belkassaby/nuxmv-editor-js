@@ -27,6 +27,8 @@
   </button>
   <button type="button" (click)="exportPng()" title="Download the diagram as PNG">PNG</button>
   <button type="button" (click)="exportSvg()" title="Download the diagram as SVG (vector)">SVG</button>
+  <button type="button" class="icon" (click)="toggleMaximize.emit()" [class.active]="maximized()"
+    [title]="maximized() ? 'Restore the panels (Esc)' : 'Give the diagram the whole window'" [attr.aria-label]="maximized() ? 'Restore panels' : 'Maximize diagram'">{{ maximized() ? '⤡' : '⤢' }}</button>
 </div>
 <div class="cy-wrap">
   <div class="cy" #cy></div>

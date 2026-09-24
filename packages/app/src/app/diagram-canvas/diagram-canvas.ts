@@ -1,4 +1,4 @@
-import { afterNextRender, Component, computed, effect, ElementRef, inject, OnDestroy, signal, untracked, viewChild } from '@angular/core';
+import { afterNextRender, Component, computed, effect, ElementRef, inject, input, OnDestroy, output, signal, untracked, viewChild } from '@angular/core';
 import cytoscape, { type Core, type EdgeSingular, type ElementDefinition, type EventObject, type NodeSingular, type StylesheetJson } from 'cytoscape';
 import edgehandles from 'cytoscape-edgehandles';
 import type { DiagramModel } from '@nuxmv-editor/language';
@@ -32,6 +32,9 @@ export class DiagramCanvas implements OnDestroy {
     readonly layouts = LAYOUTS;
     readonly layoutKind = signal<LayoutKind>(savedLayout());
     readonly layingOut = signal(false);
+    readonly maximized = input(false);
+    readonly toggleMaximize = output<void>();
+    private resizeObserver?: ResizeObserver;
 
     private cy?: Core;
     private eh?: EdgeHandlesInstance;
@@ -85,6 +88,9 @@ export class DiagramCanvas implements OnDestroy {
             selectionType: 'single'
         });
         this.cy = cy;
+        // Keep Cytoscape's viewport in step with the pane size (splitters, maximize, window).
+        this.resizeObserver = new ResizeObserver(() => cy.resize());
+        this.resizeObserver.observe(this.host().nativeElement);
         this.eh = (cy as unknown as { edgehandles(o: object): EdgeHandlesInstance }).edgehandles({
             canConnect: () => true,
             edgeParams: () => ({ data: { preview: true } }),
@@ -331,6 +337,7 @@ export class DiagramCanvas implements OnDestroy {
     }
 
     ngOnDestroy(): void {
+        this.resizeObserver?.disconnect();
         this.eh?.destroy();
         this.cy?.destroy();
     }

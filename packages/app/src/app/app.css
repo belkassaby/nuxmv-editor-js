@@ -22,11 +22,16 @@
 .status.bad { background: var(--error-bg); color: var(--error); }
 .flash { font-size: 12px; background: var(--accent-bg); color: var(--accent); padding: 3px 8px; border-radius: 6px; }
 
-.workspace { flex: 1; min-height: 0; display: grid; gap: 1px; background: var(--border);
-  grid-template-columns: minmax(280px, 34fr) minmax(320px, 46fr) minmax(240px, 20fr);
-  grid-template-rows: minmax(0, 1fr) minmax(200px, 38vh);
-  grid-template-areas: 'text canvas inspector' 'text bottom bottom'; }
-.workspace.no-text { grid-template-columns: 28px minmax(320px, 1fr) minmax(240px, 300px); }
+.workspace { flex: 1; min-height: 0; display: grid; background: var(--border);
+  grid-template-columns: var(--text-w) 1px minmax(320px, 1fr) 1px var(--insp-w);
+  grid-template-rows: minmax(200px, 1fr) 1px var(--bottom-h);
+  grid-template-areas: 'text s1 canvas s2 inspector' 'text s1 s3 s3 s3' 'text s1 bottom bottom bottom'; }
+.split-text { grid-area: s1; }
+.split-inspector { grid-area: s2; }
+.split-bottom { grid-area: s3; }
+.workspace.no-text { grid-template-areas: 'text text canvas s2 inspector' 'text text s3 s3 s3' 'text text bottom bottom bottom'; }
+.workspace.maximized { grid-template: 'canvas' minmax(0, 1fr) / minmax(0, 1fr); }
+.workspace.maximized > :not(.canvas-pane) { display: none; }
 .pane { background: var(--surface); min-width: 0; min-height: 0; display: flex; flex-direction: column; }
 .text-pane { grid-area: text; }
 .canvas-pane { grid-area: canvas; }
@@ -45,8 +50,11 @@
 
 @media (max-width: 900px) {
   :host { height: auto; min-height: 100vh; }
-  .workspace, .workspace.no-text { grid-template-columns: 1fr; grid-template-rows: auto; grid-template-areas: 'canvas' 'inspector' 'bottom' 'text'; }
-  .canvas-pane { height: 60vh; }
+  .workspace, .workspace.no-text { grid-template-columns: 1fr; grid-template-rows: auto; grid-template-areas: 'canvas' 'inspector' 'bottom' 'text'; gap: 1px; }
+  .workspace app-splitter { display: none; }
+  /* No splitters on small screens: drag the corner of the diagram to resize it. */
+  .canvas-pane { height: 60vh; resize: vertical; overflow: hidden; min-height: 240px; }
+  .workspace.maximized .canvas-pane { height: calc(100vh - 60px); resize: none; }
   .text-pane { height: 60vh; }
   .bottom-pane { min-height: 50vh; }
   .show-text { writing-mode: horizontal-tb; }

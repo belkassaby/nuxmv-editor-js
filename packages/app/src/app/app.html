@@ -81,7 +81,8 @@
   <button type="button" class="primary" (click)="check()" [disabled]="store.errorCount() > 0 || store.verification()?.running">▶ Check</button>
 </header>
 
-<main class="workspace" [class.no-text]="!showText()">
+<main class="workspace" [class.no-text]="!showText()" [class.maximized]="canvasMax()"
+  [style.--text-w]="(showText() ? textW() : 28) + 'px'" [style.--insp-w]="inspectorW() + 'px'" [style.--bottom-h]="bottomH() + 'px'">
   @if (showText()) {
     <section class="pane text-pane" aria-label="Text editor">
       <div class="pane-head">
@@ -102,9 +103,14 @@
     <button type="button" class="show-text" (click)="showText.set(true)" title="Show the text editor">⟩ Text</button>
   }
 
+  @if (showText()) {
+    <app-splitter class="split-text" direction="vertical" label="Resize the text editor" (moved)="resizeText($event)" (reset)="resetSize('text')" (done)="saveSizes()" />
+  }
   <section class="pane canvas-pane" aria-label="Diagram editor">
-    <app-diagram-canvas />
+    <app-diagram-canvas [maximized]="canvasMax()" (toggleMaximize)="canvasMax.set(!canvasMax())" />
   </section>
+  <app-splitter class="split-inspector" direction="vertical" label="Resize the inspector" (moved)="resizeInspector($event)" (reset)="resetSize('inspector')" (done)="saveSizes()" />
+  <app-splitter class="split-bottom" direction="horizontal" label="Resize the diagram and the bottom panel" (moved)="resizeBottom($event)" (reset)="resetSize('bottom')" (done)="saveSizes()" />
 
   <aside class="pane inspector-pane" aria-label="Inspector">
     <app-inspector />
