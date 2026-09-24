@@ -1,0 +1,27 @@
+// Agent generation (after adamterlson/AgenticStateMachines, agent_generation.ts,
+// including its commented-out "Testing Machine" retry loop)
+diagram AgentGeneration
+
+attributes {
+  step : { events, context, actors, writing, testing, finished };
+}
+
+initial state event_storming "Event Storming" { step = events } at (80, 80)
+state defining_context "Defining Context" { step = context } at (300, 80)
+state connecting_actors "Connecting Actors" { step = actors } at (520, 80)
+state writing_machine "Writing Machine" { step = writing } at (520, 260)
+state testing_machine "Testing Machine" { step = testing } at (300, 260)
+state done "Done" { step = finished } at (80, 260)
+
+event_storming -> defining_context;
+defining_context -> connecting_actors;
+connecting_actors -> writing_machine;
+writing_machine -> testing_machine;
+testing_machine -> done : "onDone";
+testing_machine -> writing_machine : "onError";
+done -> done;
+
+LTLSPEC NAME actors_before_code := !(step = writing) U step = actors;
+CTLSPEC NAME can_finish := AG EF step = finished;
+LTLSPEC NAME always_finishes := F step = finished;
+LTLSPEC NAME tested_before_done := !(step = finished) U step = testing;

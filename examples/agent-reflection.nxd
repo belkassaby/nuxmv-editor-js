@@ -1,0 +1,25 @@
+// Reflection (after adamterlson/AgenticStateMachines, reflection.ts)
+// critiquing -> writing only while loopCount < maxLoopCount (= 1), else done.
+diagram Reflection
+
+attributes {
+  phase : { writer, critic, finished };
+  loop  : 0..1;
+}
+
+initial state writing0 "write draft" { phase = writer, loop = 0 } at (80, 80)
+state critiquing0 "critique draft" { phase = critic, loop = 0 } at (320, 80)
+state writing1 "rewrite" { phase = writer, loop = 1 } at (320, 260)
+state critiquing1 "critique rewrite" { phase = critic, loop = 1 } at (80, 260)
+state done "final" { phase = finished, loop = 1 } at (80, 420)
+
+writing0 -> critiquing0 : "writerAgent done";
+critiquing0 -> writing1 : "loopCount < max";
+writing1 -> critiquing1 : "writerAgent done";
+critiquing1 -> done : "loopCount = max";
+done -> done;
+
+LTLSPEC NAME terminates := F phase = finished;
+INVARSPEC NAME bounded := loop <= 1;
+CTLSPEC NAME last_critique_ends := AG (phase = critic & loop = 1 -> AX phase = finished);
+LTLSPEC NAME critic_follows_writer := G (phase = writer -> X phase = critic);

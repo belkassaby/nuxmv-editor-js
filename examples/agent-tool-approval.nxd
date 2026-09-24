@@ -1,0 +1,25 @@
+// Tool approval (after adamterlson/AgenticStateMachines, human_in_the_loop.ts)
+diagram ToolApproval
+
+attributes {
+  awaiting_human : boolean;
+  tool_active    : boolean;
+  finished       : boolean;
+}
+
+initial state writing "LLM writing" { awaiting_human = FALSE, tool_active = FALSE, finished = FALSE } at (100, 200)
+state approval_required "wait for admin" { awaiting_human = TRUE, tool_active = FALSE, finished = FALSE } at (360, 80)
+state using_tool "get_inventory" { awaiting_human = FALSE, tool_active = TRUE, finished = FALSE } at (560, 200)
+state done "final" { awaiting_human = FALSE, tool_active = FALSE, finished = TRUE } at (360, 330)
+
+writing -> approval_required : "tool call";
+writing -> done : "answer";
+approval_required -> using_tool : "approve";
+approval_required -> writing : "deny";
+using_tool -> writing : "tool response";
+done -> done;
+
+CTLSPEC NAME no_tool_without_approval := AG (!awaiting_human -> AX !tool_active);
+LTLSPEC NAME human_is_consulted := G (X tool_active -> awaiting_human);
+LTLSPEC NAME approval_is_answered := G (awaiting_human -> X !awaiting_human);
+LTLSPEC NAME always_finishes := F finished;

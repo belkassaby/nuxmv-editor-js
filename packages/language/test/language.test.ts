@@ -19,6 +19,12 @@ describe('parser', () => {
         expect(outcome.model.states.length).toBeGreaterThan(0);
     });
 
+    it.each(EXAMPLES.map(e => [e.id, e]))('declares an expected verdict for every property of %s', async (_id, example) => {
+        const { model, diagnostics } = await parseDiagram(example.source);
+        expect(model.specs).toHaveLength(example.expected.length);
+        expect(diagnostics.filter(d => d.severity === 'warning')).toEqual([]);
+    });
+
     it('builds the diagram model', async () => {
         const { model } = await parseDiagram(`
             diagram M

@@ -301,6 +301,10 @@ interface EdgeHandlesInstance {
     destroy(): void;
 }
 
+function longestLine(text: unknown): number {
+    return typeof text === 'string' ? Math.max(...text.split('\n').map(l => l.length)) : 0;
+}
+
 const css = (name: string, fallback: string) =>
     typeof document === 'undefined' ? fallback : getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
 
@@ -323,7 +327,8 @@ const STYLE: StylesheetJson = [
             'background-color': () => css('--node-bg', '#e8f1fb'),
             'border-width': 2,
             'border-color': () => css('--node-border', '#4a7fb5'),
-            width: 64,
+            // Grow into an ellipse when the name or label is long.
+            width: (n: NodeSingular) => Math.max(64, longestLine(n.data('display')) * 7.8 + 24),
             height: 64,
             'transition-property': 'background-color, border-color, opacity',
             'transition-duration': 150

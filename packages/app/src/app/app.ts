@@ -24,7 +24,7 @@ type Tab = 'attributes' | 'properties' | 'trace' | 'model' | 'console';
 export class App implements OnInit {
     readonly store = inject(DiagramStore);
     readonly api = inject(NuxmvApi);
-    readonly examples = EXAMPLES;
+    readonly exampleGroups = [...new Set(EXAMPLES.map(e => e.group))].map(name => ({ name, examples: EXAMPLES.filter(e => e.group === name) }));
     readonly tab = signal<Tab>('properties');
     readonly openMenu = signal<string | null>(null);
     readonly showText = signal(true);

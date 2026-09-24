@@ -1,0 +1,32 @@
+// Orchestration / routing (after adamterlson/AgenticStateMachines, collaboration.ts)
+// The planner picks any tool; every specialist reports back to the planner.
+diagram Orchestration
+
+attributes {
+  agent : { planner, recipe, procurement, meal_prep, feedback, summarizer, none };
+}
+
+initial state planning "Planning" { agent = planner } at (320, 240)
+state writing_recipe "Writing Recipe" { agent = recipe } at (120, 80)
+state procuring "Procuring Ingredients" { agent = procurement } at (520, 80)
+state preparing_meal "Preparing Meal" { agent = meal_prep } at (560, 300)
+state getting_feedback "Getting Feedback" { agent = feedback } at (320, 440)
+state summarizing "Summarizing Result" { agent = summarizer } at (80, 320)
+state done "Done" { agent = none } at (80, 460)
+
+planning -> writing_recipe : "recipeAgent";
+planning -> procuring : "procurementAgent";
+planning -> preparing_meal : "mealPrepAgent";
+planning -> getting_feedback : "humanFeedbackAgent";
+planning -> summarizing : "done";
+writing_recipe -> planning;
+procuring -> planning;
+preparing_meal -> planning;
+getting_feedback -> planning;
+summarizing -> done;
+done -> done;
+
+CTLSPEC NAME can_deliver := AG EF agent = none;
+LTLSPEC NAME recipe_before_cooking := !(agent = meal_prep) U agent = recipe;
+LTLSPEC NAME eventually_done := F agent = none;
+CTLSPEC NAME planner_is_hub := AG (agent = recipe | agent = procurement | agent = meal_prep | agent = feedback -> AX agent = planner);

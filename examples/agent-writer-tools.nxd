@@ -1,0 +1,23 @@
+// Writer w/ tool use (after adamterlson/AgenticStateMachines, writer.ts)
+// The LLM either requests a tool call or answers; tool results go back to it.
+diagram WriterToolUse
+
+attributes {
+  llm_busy    : boolean;
+  tool_active : boolean;
+  finished    : boolean;
+}
+
+initial state writing "LLM writing" { llm_busy = TRUE, tool_active = FALSE, finished = FALSE } at (120, 180)
+state using_tool "get_inventory" { llm_busy = FALSE, tool_active = TRUE, finished = FALSE } at (400, 80)
+state done "final" { llm_busy = FALSE, tool_active = FALSE, finished = TRUE } at (400, 290)
+
+writing -> using_tool : "tool_calls != null";
+writing -> done : "answer";
+using_tool -> writing : "add_tool_response";
+done -> done;
+
+INVARSPEC NAME tool_xor_finished := !(tool_active & finished);
+LTLSPEC NAME results_return := G (tool_active -> X llm_busy);
+LTLSPEC NAME always_answers := F finished;
+CTLSPEC NAME can_always_finish := AG (!finished -> EF finished);

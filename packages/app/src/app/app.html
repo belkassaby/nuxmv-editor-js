@@ -21,11 +21,14 @@
       <button type="button" (click)="toggleMenu('examples', $event)" [attr.aria-expanded]="openMenu() === 'examples'">Examples</button>
       @if (openMenu() === 'examples') {
         <div class="menu-list wide" role="menu">
-          @for (e of examples; track e.id) {
-            <button type="button" role="menuitem" (click)="loadExample(e.id)">
-              <strong>{{ e.title }}</strong>
-              <span class="muted small">{{ e.description }}</span>
-            </button>
+          @for (g of exampleGroups; track g.name) {
+            <div class="menu-group">{{ g.name }}</div>
+            @for (e of g.examples; track e.id) {
+              <button type="button" role="menuitem" (click)="loadExample(e.id)">
+                <strong>{{ e.title }}</strong>
+                <span class="muted small">{{ e.description }}</span>
+              </button>
+            }
           }
         </div>
       }

@@ -241,9 +241,27 @@ NUXMV_PATH=/path/to/nuXmv npm test -w @nuxmv-editor/server   # also runs every e
 
 ## Examples
 
-`examples/` contains the resource monitor (§2.2.2), the Appendix A walkthrough together with its
-`attributeData.txt`, the [HR04] mutual exclusion model (its liveness property fails), and the
+**Classic models** (`examples/`): the resource monitor (§2.2.2), the Appendix A walkthrough with
+its `attributeData.txt`, the [HR04] mutual exclusion model (its liveness property fails), and the
 Clarke–Grumberg–Peled microwave oven (its property holds only under fairness).
+
+**Agentic AI patterns**, modelled after the XState machines of
+[adamterlson/AgenticStateMachines](https://github.com/adamterlson/AgenticStateMachines). The
+LLM's decisions (call a tool or answer, approve or deny, which agent runs next) become
+nondeterministic transitions, so nuXmv checks every possible choice the model could make:
+
+| Example                          | What model checking shows                                                            |
+| -------------------------------- | ------------------------------------------------------------------------------------ |
+| Writer with tool use             | Tool results always return to the writer, but the LLM can call the tool forever       |
+| Reflection (bounded)             | With the loop counter unrolled, termination is proved                                |
+| Human-in-the-loop tool approval  | No tool runs without approval; repeated denials can prevent completion               |
+| Orchestration (LLM router)       | The router can prepare the meal before any recipe exists (counterexample)            |
+| Collaboration (fixed pipeline)   | The same agents in a fixed sequence satisfy the ordering and termination properties  |
+| Chat agent                       | The machine's `done` state is unreachable: dead code in the original definition      |
+| Agent generation with testing    | Steps happen in order, but a failing test can retry forever                          |
+
+Every example lists the verdict nuXmv should return for each property, and the server tests check
+them against the real tool.
 
 ## License
 

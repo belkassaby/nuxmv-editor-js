@@ -85,6 +85,13 @@ describe.skipIf(!real)('real nuXmv', () => {
         }
     });
 
+    it.each(EXAMPLES.map(e => [e.id, e]))('gives the documented verdicts for %s', async (_id, example) => {
+        const { model } = await parseDiagram(example.source);
+        const result = await runNuxmv(generateSmv(model).text, { engine: 'bdd' }, runner);
+        const verdicts = matchResults(model.specs, result.results).map(r => r?.verdict);
+        expect(verdicts).toEqual(example.expected);
+    });
+
     it('finds the mutual exclusion liveness counterexample', async () => {
         const { model } = await parseDiagram(EXAMPLES.find(e => e.id === 'mutex')!.source);
         const result = await runNuxmv(generateSmv(model).text, { engine: 'bdd' }, runner);

@@ -1,0 +1,25 @@
+// Collaboration as a defined sequence of specialist agents
+diagram Collaboration
+
+attributes {
+  agent : { recipe, procurement, meal_prep, feedback, summarizer, none };
+}
+
+initial state writing_recipe "Writing Recipe" { agent = recipe } at (80, 100)
+state procuring "Procuring Ingredients" { agent = procurement } at (300, 100)
+state preparing_meal "Preparing Meal" { agent = meal_prep } at (520, 100)
+state getting_feedback "Getting Feedback" { agent = feedback } at (520, 280)
+state summarizing "Summarizing Result" { agent = summarizer } at (300, 280)
+state done "Done" { agent = none } at (80, 280)
+
+writing_recipe -> procuring;
+procuring -> preparing_meal;
+preparing_meal -> getting_feedback;
+getting_feedback -> summarizing;
+summarizing -> done;
+done -> done;
+
+LTLSPEC NAME recipe_before_cooking := !(agent = meal_prep) U agent = recipe;
+LTLSPEC NAME ingredients_before_cooking := !(agent = meal_prep) U agent = procurement;
+LTLSPEC NAME eventually_done := F agent = none;
+CTLSPEC NAME feedback_after_meal := AG (agent = meal_prep -> AX agent = feedback);

@@ -1,0 +1,26 @@
+// Chat with recipe agent (after adamterlson/AgenticStateMachines, writer_chat.ts)
+// Note: no transition of the original machine targets 'done'.
+diagram ChatAgent
+
+attributes {
+  turn : { user, assistant, admin, tool, closed };
+}
+
+initial state idle "waiting for user" { turn = user } at (100, 200)
+state writing "LLM writing" { turn = assistant } at (340, 200)
+state approval_required "wait for admin" { turn = admin } at (560, 80)
+state using_tool "get_inventory" { turn = tool } at (560, 320)
+state done "final (unreachable)" { turn = closed } at (100, 400)
+
+idle -> writing : "USER_MESSAGE";
+writing -> idle : "reply";
+writing -> approval_required : "tool call";
+approval_required -> using_tool : "approve";
+approval_required -> writing : "deny";
+using_tool -> writing : "tool response";
+done -> done;
+
+CTLSPEC NAME can_always_reply := AG EF turn = user;
+CTLSPEC NAME final_state_reachable := EF turn = closed;
+INVARSPEC NAME never_closed := turn != closed;
+CTLSPEC NAME tool_needs_admin := AG (turn != admin -> AX turn != tool);
