@@ -56,6 +56,14 @@ describe('parser', () => {
         });
     });
 
+    it('accepts single-letter operator names as diagram name', async () => {
+        for (const name of ['T', 'S', 'O', 'G']) {
+            const outcome = await parseDiagram(`diagram ${name}\ninitial state a\na -> a;`);
+            expect(outcome.hasErrors).toBe(false);
+            expect(outcome.model.name).toBe(name);
+        }
+    });
+
     it('reports syntax errors', async () => {
         const outcome = await parseDiagram('state s0 {');
         expect(outcome.hasSyntaxErrors).toBe(true);
@@ -99,6 +107,9 @@ describe('validator', () => {
         expect(await messages(base + 'CTLSPEC A [ p U !p ];')).toEqual([]);
         expect(await messages(base + 'INVARSPEC F p;')).toHaveLength(1);
         expect(await messages(base + 'FAIRNESS G p;')).toHaveLength(1);
+        expect(await messages(base + 'LTLSPEC G (p -> O p) & H (Y p -> p) & (p S p) & (p T p) & Z p;')).toEqual([]);
+        expect(await messages(base + 'CTLSPEC AG O p;')).toHaveLength(1);
+        expect(await messages(base + 'INVARSPEC Y p;')).toHaveLength(1);
     });
 
     it('warns about dead ends, missing initial states and duplicates', async () => {

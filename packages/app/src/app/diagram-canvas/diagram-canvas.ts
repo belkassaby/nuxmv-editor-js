@@ -126,6 +126,9 @@ export class DiagramCanvas implements OnDestroy {
         this.tooltip.set(null);
         const names = new Set(model.states.map(s => s.name));
         const unplaced: string[] = [];
+        // A different diagram pasted or typed over the old one: fit it in view.
+        const previous = cy.nodes().map(n => n.id());
+        if (previous.length > 0 && names.size > 0 && !previous.some(id => names.has(id))) this.fitPending = true;
 
         cy.batch(() => {
             cy.nodes().forEach(n => {

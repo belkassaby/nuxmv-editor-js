@@ -306,6 +306,67 @@ LTLSPEC NAME always_finishes := F finished;
 `
     },
     {
+        id: 'agent-coding-loop',
+        title: 'Agentic coding loop',
+        group: 'Agentic AI patterns',
+        description: 'A coding agent designs, codes and self-heals against the tests, with humans gating the plan and the review. Past-time LTL proves nothing is deployed unreviewed or untested.',
+        expected: ['true', 'true', 'true', 'true', 'true', 'true', 'false'],
+        source: `// Developer-led agentic coding loop (after agentic_coding_fsm_guide.pdf).
+// The agent designs, codes and self-heals against the test suite, but a
+// human gates the plan and the code review. The retry budget of the Python
+// scaffold (max_test_retries = 3) is unrolled into the states:
+// developing_k / testing_k hold test_failures = k.
+// Unlike the guide's Python scaffold, which never resets test_failures after
+// escalating (a second request would escalate on its first failure), the
+// counter restarts at 0 when the loop returns to PROMPTING.
+diagram AgenticCodingLoop
+
+attributes {
+  phase         : { prompting, designing, developing, testing, code_review, deployed };
+  test_failures : 0..3;   // the domain allows 3; the invariant proves it never gets there
+}
+
+initial state prompting "human prompt" { phase = prompting, test_failures = 0 } at (80, 200)
+state designing "agent plans, human reviews" { phase = designing, test_failures = 0 } at (260, 80)
+state developing0 "agent codes" { phase = developing, test_failures = 0 } at (460, 80)
+state testing0 "tests run" { phase = testing, test_failures = 0 } at (660, 80)
+state developing1 "self-heal #1" { phase = developing, test_failures = 1 } at (660, 240)
+state testing1 "tests run #2" { phase = testing, test_failures = 1 } at (860, 240)
+state developing2 "self-heal #2" { phase = developing, test_failures = 2 } at (860, 400)
+state testing2 "tests run #3" { phase = testing, test_failures = 2 } at (660, 400)
+state code_review "human git diff review" { phase = code_review, test_failures = 0 } at (460, 400)
+state deployed "merged" { phase = deployed, test_failures = 0 } at (260, 400)
+
+prompting -> designing : "USER_SUBMIT";
+designing -> developing0 : "PLAN_ACCEPTED";
+designing -> prompting : "human_clarifies";
+developing0 -> testing0 : "CODE_WRITTEN";
+testing0 -> code_review : "TESTS_PASSED";
+testing0 -> developing1 : "TESTS_FAILED";
+developing1 -> testing1 : "CODE_WRITTEN";
+testing1 -> code_review : "TESTS_PASSED";
+testing1 -> developing2 : "TESTS_FAILED";
+developing2 -> testing2 : "CODE_WRITTEN";
+testing2 -> code_review : "TESTS_PASSED";
+testing2 -> prompting : "max_retries_reached";
+code_review -> deployed : "human_approved";
+code_review -> prompting : "human_rejected";
+code_review -> designing : "redesign";
+deployed -> deployed;
+
+// Guardrails: code is only deployed after a human review of tested code.
+LTLSPEC NAME reviewed_before_deploy := G (phase = deployed -> O phase = code_review);
+LTLSPEC NAME tested_before_review := G (phase = code_review -> Y phase = testing);
+LTLSPEC NAME human_gate := G (phase = deployed & Y phase != deployed -> Y phase = code_review);
+// The self-healing loop is bounded: every coding round ends in review or escalation.
+LTLSPEC NAME bounded_self_healing := G (phase = developing -> F (phase = code_review | phase = prompting));
+INVARSPEC NAME retry_budget := test_failures <= 2;
+// Deployment is always possible, but never guaranteed: the human may keep rejecting.
+CTLSPEC NAME can_deploy := AG EF phase = deployed;
+LTLSPEC NAME always_deploys := F phase = deployed;
+`
+    },
+    {
         id: 'agent-orchestration',
         title: 'Orchestration (LLM router)',
         group: 'Agentic AI patterns',

@@ -52,14 +52,20 @@ export type StateDiagramKeywordNames =
     | "FAIRNESS"
     | "FALSE"
     | "G"
+    | "H"
     | "INVARSPEC"
     | "JUSTICE"
     | "LTLSPEC"
     | "NAME"
+    | "O"
+    | "S"
+    | "T"
     | "TRUE"
     | "U"
     | "V"
     | "X"
+    | "Y"
+    | "Z"
     | "["
     | "]"
     | "at"
@@ -150,7 +156,7 @@ export interface BinaryExpression extends langium.AstNode {
     readonly $container: BinaryExpression | Fairness | PathQuantifiedExpression | Specification | UnaryExpression;
     readonly $type: 'BinaryExpression';
     left: Expression;
-    operator: '!=' | '&' | '*' | '+' | '-' | '->' | '/' | '<' | '<->' | '<=' | '=' | '>' | '>=' | 'U' | 'V' | 'mod' | 'xnor' | 'xor' | '|';
+    operator: '!=' | '&' | '*' | '+' | '-' | '->' | '/' | '<' | '<->' | '<=' | '=' | '>' | '>=' | 'S' | 'T' | 'U' | 'V' | 'mod' | 'xnor' | 'xor' | '|';
     right: Expression;
 }
 
@@ -211,7 +217,7 @@ export function isBooleanValue(item: unknown): item is BooleanValue {
 export interface Diagram extends langium.AstNode {
     readonly $type: 'Diagram';
     elements: Array<Element>;
-    name?: string;
+    name?: DiagramName;
 }
 
 export const Diagram = {
@@ -222,6 +228,12 @@ export const Diagram = {
 
 export function isDiagram(item: unknown): item is Diagram {
     return reflection.isInstance(item, Diagram.$type);
+}
+
+export type DiagramName = 'A' | 'E' | 'F' | 'G' | 'H' | 'O' | 'S' | 'T' | 'U' | 'V' | 'X' | 'Y' | 'Z' | string;
+
+export function isDiagramName(item: unknown): item is DiagramName {
+    return item === 'G' || item === 'F' || item === 'X' || item === 'U' || item === 'V' || item === 'Y' || item === 'Z' || item === 'H' || item === 'O' || item === 'S' || item === 'T' || item === 'A' || item === 'E' || (typeof item === 'string' && (/[_a-zA-Z][\w$#]*/.test(item)));
 }
 
 export type Element = AttributeBlock | Fairness | Specification | State | Transition;
@@ -484,10 +496,10 @@ export function isUnaryExpression(item: unknown): item is UnaryExpression {
     return reflection.isInstance(item, UnaryExpression.$type);
 }
 
-export type UnaryOperator = '!' | '-' | 'AF' | 'AG' | 'AX' | 'EF' | 'EG' | 'EX' | 'F' | 'G' | 'X';
+export type UnaryOperator = '!' | '-' | 'AF' | 'AG' | 'AX' | 'EF' | 'EG' | 'EX' | 'F' | 'G' | 'H' | 'O' | 'X' | 'Y' | 'Z';
 
 export function isUnaryOperator(item: unknown): item is UnaryOperator {
-    return item === '!' || item === '-' || item === 'G' || item === 'F' || item === 'X' || item === 'AG' || item === 'AF' || item === 'AX' || item === 'EG' || item === 'EF' || item === 'EX';
+    return item === '!' || item === '-' || item === 'G' || item === 'F' || item === 'X' || item === 'Y' || item === 'Z' || item === 'H' || item === 'O' || item === 'AG' || item === 'AF' || item === 'AX' || item === 'EG' || item === 'EF' || item === 'EX';
 }
 
 export type StateDiagramAstType = {

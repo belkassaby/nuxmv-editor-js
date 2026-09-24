@@ -23,8 +23,13 @@
 grammar StateDiagram
 
 entry Diagram:
-    ('diagram' name=ID)?
+    ('diagram' name=DiagramName)?
     (elements+=Element)*;
+
+// The diagram name only appears in a comment of the nuXmv model, so the
+// single-letter temporal operators are accepted there.
+DiagramName returns string:
+    ID | 'G' | 'F' | 'X' | 'U' | 'V' | 'Y' | 'Z' | 'H' | 'O' | 'S' | 'T' | 'A' | 'E';
 
 Element:
     AttributeBlock | State | Transition | Fairness | Specification;
@@ -105,8 +110,9 @@ Disjunction infers Expression:
 Conjunction infers Expression:
     TemporalBinary ({infer BinaryExpression.left=current} operator='&' right=TemporalBinary)*;
 
+// U until, V release; past-time S since, T triggered.
 TemporalBinary infers Expression:
-    Comparison ({infer BinaryExpression.left=current} operator=('U' | 'V') right=Comparison)*;
+    Comparison ({infer BinaryExpression.left=current} operator=('U' | 'V' | 'S' | 'T') right=Comparison)*;
 
 Comparison infers Expression:
     Additive ({infer BinaryExpression.left=current} operator=('=' | '!=' | '<' | '>' | '<=' | '>=') right=Additive)*;
@@ -121,8 +127,9 @@ Unary infers Expression:
     {infer UnaryExpression} operator=UnaryOperator operand=Unary
   | Primary;
 
+// Future LTL (G F X), past LTL (Y previous, Z weak previous, H historically, O once), CTL.
 UnaryOperator returns string:
-    '!' | '-' | 'G' | 'F' | 'X' | 'AG' | 'AF' | 'AX' | 'EG' | 'EF' | 'EX';
+    '!' | '-' | 'G' | 'F' | 'X' | 'Y' | 'Z' | 'H' | 'O' | 'AG' | 'AF' | 'AX' | 'EG' | 'EF' | 'EX';
 
 Primary infers Expression:
     '(' Expression ')'

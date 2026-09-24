@@ -3,7 +3,7 @@ import { tags } from '@lezer/highlight';
 
 const KEYWORDS = new Set(['diagram', 'attributes', 'state', 'initial', 'at', 'boolean', 'NAME', 'mod', 'xor', 'xnor']);
 const SECTIONS = new Set(['LTLSPEC', 'CTLSPEC', 'INVARSPEC', 'FAIRNESS', 'JUSTICE']);
-const TEMPORAL = new Set(['G', 'F', 'X', 'U', 'V', 'A', 'E', 'AG', 'AF', 'AX', 'EG', 'EF', 'EX']);
+const TEMPORAL = new Set(['G', 'F', 'X', 'U', 'V', 'Y', 'Z', 'H', 'O', 'S', 'T', 'A', 'E', 'AG', 'AF', 'AX', 'EG', 'EF', 'EX']);
 const CONSTANTS = new Set(['TRUE', 'FALSE']);
 
 /** Syntax highlighting for `.nxd`; structure and errors come from Langium. */

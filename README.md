@@ -146,6 +146,7 @@ Properties refer to attribute values, or to the current state through the `state
 | Recovery | `CTLSPEC AG EF state = idle` | From every reachable state, a path back to `idle` exists |
 | Guardrail | `CTLSPEC AG (!awaiting_human -> AX !tool_active)` | A tool can only start right after a human approval step |
 | Step ordering | `LTLSPEC !(agent = meal_prep) U agent = recipe` | No meal preparation before a recipe has been written |
+| Gate (past-time) | `LTLSPEC G (phase = deployed -> O phase = code_review)` | Nothing is deployed unless a code review happened before |
 | Dead code | `CTLSPEC EF state = done` | `done` can be reached at all (false reveals an unreachable state) |
 | No deadlock | `CTLSPEC AG EX TRUE` | Every reachable state has a successor |
 
@@ -323,10 +324,10 @@ INVARSPEC level <= 3;
 ```
 
 - Expressions use nuXmv syntax: `! & | xor xnor -> <->`, `= != < > <= >=`, `+ - * / mod`, LTL
-  `G F X U V`, CTL `AG AF AX EG EF EX A[p U q] E[p U q]`. The variable `state` holds the name of
+  `G F X U V`, past-time LTL `Y Z O H S T`, CTL `AG AF AX EG EF EX A[p U q] E[p U q]`. The variable `state` holds the name of
   the current state.
 - `--`, `//` and `/* */` comments are accepted.
-- Keywords and temporal operators (`state`, `at`, `G`, `F`, `X`, `U`, `V`, `A`, `E`, …) are
+- Keywords and temporal operators (`state`, `at`, `G`, `F`, `X`, `U`, `V`, `O`, `H`, `A`, `E`, …) are
   reserved and cannot be used as names.
 
 The generator writes the "sequential style" model of the dissertation (§2.2.2): a `state`
@@ -405,6 +406,7 @@ nondeterministic transitions, so nuXmv checks every possible choice the model co
 | Reflection loop with retry budget | Always terminates, but can end in `failed` after two rejected refinements             |
 | Human-in-the-loop tool approval  | No tool runs without approval; repeated denials can prevent completion               |
 | Orchestration (LLM router)       | The router can prepare the meal before any recipe exists (counterexample)            |
+| Agentic coding loop              | Nothing is deployed unreviewed or untested; self-healing is bounded; a human can still block deployment |
 | Collaboration (fixed pipeline)   | The same agents in a fixed sequence satisfy the ordering and termination properties  |
 | Chat agent                       | The machine's `done` state is unreachable: dead code in the original definition      |
 | Agent generation with testing    | Steps happen in order, but a failing test can retry forever                          |

@@ -18,7 +18,7 @@ import {
 } from './generated/ast.js';
 import type { StateDiagramServices } from './state-diagram-module.js';
 
-const LTL_OPERATORS = new Set(['G', 'F', 'X', 'U', 'V']);
+const LTL_OPERATORS = new Set(['G', 'F', 'X', 'U', 'V', 'Y', 'Z', 'H', 'O', 'S', 'T']);
 
 /** Words reserved by the nuXmv input language that the .nxd grammar does not already reserve. */
 export const NUXMV_RESERVED = new Set(
@@ -235,7 +235,7 @@ function* expressionNodes(expression: Expression): Generator<AstNode> {
 
 function temporalOperator(node: AstNode): string | undefined {
     if (isUnaryExpression(node) && node.operator !== '!' && node.operator !== '-') return node.operator;
-    if (isBinaryExpression(node) && (node.operator === 'U' || node.operator === 'V')) {
+    if (isBinaryExpression(node) && ['U', 'V', 'S', 'T'].includes(node.operator)) {
         // `U` directly inside A[..] / E[..] is part of the CTL operator.
         return isPathQuantifiedExpression(node.$container) ? undefined : node.operator;
     }
