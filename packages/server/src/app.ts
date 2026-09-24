@@ -81,8 +81,21 @@ export function createApp(options: AppOptions): express.Express {
 
     if (options.staticDir && existsSync(join(options.staticDir, 'index.html'))) {
         const dir = options.staticDir;
-        app.use(express.static(dir, { index: 'index.html', maxAge: '1h' }));
-        app.get(/^\/(?!api\/).*/, (_req, res) => res.sendFile(join(dir, 'index.html')));
+        // Bundles have content hashes and can be cached; index.html must always be
+        // revalidated so a rebuilt app is picked up on the next page load.
+        app.use(
+            express.static(dir, {
+                index: 'index.html',
+                maxAge: '1h',
+                setHeaders: (res, path) => {
+                    if (path.endsWith('.html')) res.setHeader('Cache-Control', 'no-cache');
+                }
+            })
+        );
+        app.get(/^\/(?!api\/).*/, (_req, res) => {
+            res.setHeader('Cache-Control', 'no-cache');
+            res.sendFile(join(dir, 'index.html'));
+        });
     }
 
     app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
