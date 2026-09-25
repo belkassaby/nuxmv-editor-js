@@ -1,4 +1,4 @@
-<dialog #dialog class="help" (click)="$event.target === dialog && close()">
+<dialog #dialog class="help" (click)="backdropClick($event)">
   <header>
     <h2>Help</h2>
     <nav class="help-tabs" role="tablist">
@@ -30,6 +30,7 @@
         <li><strong>Run</strong> it: the <em>Python</em> tab generates an implementation that only allows the verified transitions and monitors the properties, a Jupyter notebook with a live diagram, property-based tests, framework exports (XState, LangGraph, Burr, Temporal) and NuRV monitors.</li>
         <li><strong>Operate</strong> it: <em>Trace → Live from Python</em> follows (and drives) a running process; <em>Check a recorded run</em> compares a real execution with the model.</li>
         <li><strong>Quantify</strong> it: with transition probabilities, the Properties tab computes how likely and how fast goals are reached.</li>
+        <li><strong>Tabs</strong>: every file, example, new diagram, imported graph and model found by Import code base opens in its own tab above the editor. Each tab keeps its text, unsaved changes, results and trace; open tabs come back after a reload. Middle-click or × closes a tab.</li>
       </ol>
       <p>Each of these has a <button type="button" class="link" (click)="show('walkthroughs')">walkthrough</button>. Existing LangGraph, CrewAI, Mermaid or XState graphs can be imported with <em>File → Import agent graph</em>.</p>
     </section>

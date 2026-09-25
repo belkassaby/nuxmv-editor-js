@@ -5,7 +5,10 @@ import { CodeExport } from './code-export';
 import { DiagramCanvas } from './diagram-canvas/diagram-canvas';
 import { DiagramStore } from './diagram-store';
 import { downloadText, pickFile } from './file-io';
+import { CodeImport } from './code-import/code-import';
 import { CodeImportDialog } from './code-import/code-import-dialog';
+import { DocumentTabs } from './document-tabs/document-tabs';
+import { DocumentTabsBar } from './document-tabs/document-tabs-bar';
 import { HelpDialog, type HelpSection } from './help-dialog/help-dialog';
 import { Inspector } from './inspector/inspector';
 import { NuxmvApi } from './nuxmv-api';
@@ -33,13 +36,15 @@ function loadSizes(): typeof DEFAULT_SIZES {
 
 @Component({
     selector: 'app-root',
-    imports: [AttributeTable, CodeImportDialog, DiagramCanvas, HelpDialog, Inspector, OutputPanel, ProblemsList, PropertiesPanel, Splitter, TextEditor, TracePanel],
+    imports: [AttributeTable, CodeImportDialog, DiagramCanvas, DocumentTabsBar, HelpDialog, Inspector, OutputPanel, ProblemsList, PropertiesPanel, Splitter, TextEditor, TracePanel],
     templateUrl: './app.html',
     styleUrl: './app.css'
 })
 export class App implements OnInit {
     readonly store = inject(DiagramStore);
     readonly api = inject(NuxmvApi);
+    readonly documents = inject(DocumentTabs);
+    readonly codeReport = inject(CodeImport);
     readonly codeExport = inject(CodeExport);
     readonly exampleGroups = [...new Set(EXAMPLES.map(e => e.group))].map(name => ({ name, examples: EXAMPLES.filter(e => e.group === name) }));
     readonly tab = signal<Tab>('properties');
@@ -151,25 +156,28 @@ export class App implements OnInit {
     // ------------------------------------------------------------ File menu
 
     newDiagram(): void {
-        if (this.confirmDiscard()) this.store.newDiagram();
+        this.documents.newDiagram();
     }
 
     async open(): Promise<void> {
-        if (!this.confirmDiscard()) return;
         // .nxd is the extension used before ProvenFlow: still opened, saved as .pflow.
         const file = await pickFile('.pflow,.nxd,.txt');
-        if (file) this.store.load(file.text, file.name.replace(/\.nxd$/, '.pflow'));
+        if (file) this.documents.open(file.text, file.name.replace(/\.nxd$/, '.pflow'), 'file');
     }
 
     /** File → Import code base…: extracts and verifies models of a project (pflow extract). */
     importCodeBase(): void {
-        this.codeImport().open();
+        this.codeImport().open(true);
     }
 
-    /** Opens a model extracted from a code base; checks it when it has false properties. */
+    /** The last code-base report: its findings and every model found, without importing again. */
+    showCodeReport(): void {
+        this.codeImport().open(false);
+    }
+
+    /** Opens a model extracted from a code base in its own tab; checks it when it has false properties. */
     async openCodeModel(event: { text: string; name: string; check: boolean }): Promise<void> {
-        if (!this.confirmDiscard()) return;
-        this.store.load(event.text, event.name);
+        this.documents.open(event.text, event.name, 'code');
         await this.store.settled();
         if (event.check && this.api.status().available) await this.check();
         else this.flash(`Opened ${event.name}: the comments at the top list the code behind each transition.`);
@@ -177,12 +185,11 @@ export class App implements OnInit {
 
     /** Imports an existing LangGraph / CrewAI / Mermaid / XState graph as a new diagram. */
     async importAgentGraph(): Promise<void> {
-        if (!this.confirmDiscard()) return;
         const file = await pickFile('.json,.mmd,.mermaid,.md,.py,.ts,.js,.txt');
         if (!file) return;
         try {
             const result = importGraph(file.text);
-            this.store.load(serializeDiagram(result.model), file.name.replace(/\.[^.]+$/, '') + '.pflow');
+            this.documents.open(serializeDiagram(result.model), file.name.replace(/\.[^.]+$/, '') + '.pflow', 'import');
             this.flash(`Imported ${file.name} (${result.format})${result.notes.length ? `: ${result.notes[0]}` : ''}`);
         } catch (error) {
             this.flash(`Could not import ${file.name}: ${(error as Error).message}`);
@@ -210,7 +217,7 @@ export class App implements OnInit {
     }
 
     loadExample(id: string): void {
-        if (this.confirmDiscard()) this.store.loadExample(id);
+        this.documents.openExample(id);
     }
 
     // ----------------------------------------------------------- nuXmv menu
@@ -242,10 +249,6 @@ export class App implements OnInit {
     reveal(offset: number): void {
         this.showText.set(true);
         setTimeout(() => this.editor()?.reveal(offset));
-    }
-
-    private confirmDiscard(): boolean {
-        return !this.store.dirty() || confirm('Discard the changes to the current diagram?');
     }
 
     private flash(text: string): void {

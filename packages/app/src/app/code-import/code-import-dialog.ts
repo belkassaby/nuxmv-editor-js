@@ -47,14 +47,27 @@ export class CodeImportDialog {
 
     readonly properties = computed(() => this.report()?.verdicts.length ?? 0);
 
-    open(): void {
+    /** `fresh`: start a new analysis; otherwise show the last report (kept across reloads). */
+    open(fresh = false): void {
         void this.codeImport.refresh();
+        if (!this.codeImport.running()) {
+            if (fresh) this.codeImport.clear();
+            else this.codeImport.restore();
+        }
         const dialog = this.dialog().nativeElement;
         if (!dialog.open) dialog.showModal();
     }
 
     close(): void {
         this.dialog().nativeElement.close();
+    }
+
+    /**
+     * Closes when the backdrop (the dialog element itself) is clicked. Returns nothing: an Angular
+     * handler returning false cancels the event, which would stop file pickers and links inside.
+     */
+    backdropClick(event: MouseEvent): void {
+        if (event.target === this.dialog().nativeElement) this.close();
     }
 
     toggle(severity: Severity): void {

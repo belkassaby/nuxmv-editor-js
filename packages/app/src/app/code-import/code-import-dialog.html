@@ -1,4 +1,4 @@
-<dialog #dialog class="help code-import" (click)="$event.target === dialog && close()" aria-label="Import code base">
+<dialog #dialog class="help code-import" (click)="backdropClick($event)" aria-label="Import code base">
   <header>
     <h2>Import code base</h2>
     @if (report(); as r) {

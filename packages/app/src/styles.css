@@ -243,3 +243,19 @@ dialog.code-import header h2 { flex: 1; }
 .code-fix { color: var(--text); }
 .code-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 10px; }
 .code-table th, .code-table td { text-align: left; padding: 5px 6px; border-bottom: 1px solid var(--border); vertical-align: top; }
+
+/* Open documents */
+.doc-tabs { display: flex; align-items: stretch; gap: 8px; padding: 0 8px; background: var(--surface); border-bottom: 1px solid var(--border); min-height: 32px; }
+.doc-tab-list { display: flex; align-items: stretch; flex: 1; min-width: 0; overflow-x: auto; scrollbar-width: thin; }
+.doc-tab { display: flex; align-items: center; gap: 6px; padding: 0 6px 0 10px; max-width: 240px; border-right: 1px solid var(--border); border-bottom: 2px solid transparent; color: var(--muted); cursor: pointer; white-space: nowrap; font-size: 13px; }
+.doc-tab:first-child { border-left: 1px solid var(--border); }
+.doc-tab:hover { background: var(--hover); color: var(--text); }
+.doc-tab.active { color: var(--text); border-bottom-color: var(--accent); background: var(--bg); font-weight: 600; }
+.doc-name { overflow: hidden; text-overflow: ellipsis; }
+.doc-icon { font-size: 11px; opacity: 0.75; }
+.doc-dirty { color: var(--accent); font-size: 10px; }
+.doc-close { border: 0; background: none; padding: 0 4px; line-height: 1; color: var(--muted); font-size: 15px; border-radius: 4px; }
+.doc-close:hover { background: var(--error-bg); color: var(--error); }
+.doc-new { border: 0; background: none; padding: 0 10px; font-size: 16px; color: var(--muted); }
+.doc-new:hover { color: var(--text); background: var(--hover); }
+.doc-report { align-self: center; border: 1px solid var(--border); border-radius: 999px; padding: 2px 10px; font-size: 12px; background: var(--bg); white-space: nowrap; max-width: 320px; overflow: hidden; text-overflow: ellipsis; }

@@ -348,8 +348,10 @@ other languages use [tree-sitter](https://tree-sitter.github.io) grammars compil
 In the editor, choose **File → Import code base…** and pick a folder on your computer (the sources
 are uploaded to the ProvenFlow server) or type a folder path. The path option is for when the
 server runs on your machine: the folder is then read in place, with its `node_modules`. Findings,
-models, patterns and paradigm profiles show in the dialog. **Open model** loads a model into the
-editor and checks it, so its counterexample is one click away. From a terminal:
+models, patterns and paradigm profiles show in the dialog. **Open model** opens a model in a new
+tab and checks it, so its counterexample is one click away. Every model can have its own tab, and
+the **Code report** button next to the tabs reopens the findings and the list of models, also after
+a reload. From a terminal:
 
 ```sh
 NUXMV_PATH=/path/to/nuXmv npx pflow extract path/to/project          # report in path/to/project/.provenflow/extract/

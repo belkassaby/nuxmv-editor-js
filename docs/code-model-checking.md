@@ -50,8 +50,11 @@ The dialog then shows:
 - the findings by category, with their fix and counterexample;
 - the models, the patterns found, and the paradigm profile with the dependencies.
 
-**Open model** loads a model into the editor and checks it: the false property's Counterexample
-button replays the run on the diagram. **Download report** saves `report.md`.
+**Open model** opens a model in a new tab and checks it: the false property's Counterexample
+button replays the run on the diagram. Each model keeps its own tab with its results. The
+**Code report** button next to the tabs (or File → Code base report…) reopens the findings and the
+list of models without importing again; the browser keeps both across reloads.
+**Download report** saves `report.md`.
 
 **From a terminal:**
 

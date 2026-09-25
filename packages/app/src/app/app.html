@@ -11,6 +11,9 @@
           <button type="button" role="menuitem" (click)="newDiagram()">New diagram</button>
           <button type="button" role="menuitem" (click)="open()">Open .pflow…</button>
           <button type="button" role="menuitem" (click)="importAgentGraph()" title="LangGraph (JSON, Mermaid, Python source), CrewAI Flow, Mermaid or XState">Import agent graph…</button>
+          @if (codeReport.report(); as r) {
+            <button type="button" role="menuitem" (click)="showCodeReport()" [title]="'Findings and models of ' + r.root">Code base report ({{ r.root }})…</button>
+          }
           <button type="button" role="menuitem" (click)="importCodeBase()" title="Extract and verify the state machines, resource lifecycles, design patterns and layers of a TypeScript/Angular/Python project">Import code base…</button>
           <button type="button" role="menuitem" (click)="save()">Save .pflow <kbd>⌘S</kbd></button>
           <hr />
@@ -86,6 +89,8 @@
   </span>
   <button type="button" class="primary" (click)="check()" [disabled]="store.errorCount() > 0 || store.verification()?.running">▶ Check</button>
 </header>
+
+<app-document-tabs (showReport)="showCodeReport()" />
 
 <main class="workspace" [class.no-text]="!showText()" [class.maximized]="canvasMax()"
   [style.--text-w]="(showText() ? textW() : 28) + 'px'" [style.--insp-w]="inspectorW() + 'px'" [style.--bottom-h]="bottomH() + 'px'">

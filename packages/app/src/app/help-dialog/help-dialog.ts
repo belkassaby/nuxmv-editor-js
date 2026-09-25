@@ -3,6 +3,7 @@ import { HelpService } from './help.service';
 import { GLOSSARY, REFERENCES, SYMBOLS } from './logic-reference';
 import { WALKTHROUGHS } from './walkthroughs';
 import { DiagramStore } from '../diagram-store';
+import { DocumentTabs } from '../document-tabs/document-tabs';
 
 export type HelpSection = 'guide' | 'walkthroughs' | 'symbols' | 'glossary' | 'references';
 
@@ -28,6 +29,7 @@ export class HelpDialog {
     ];
 
     private readonly store = inject(DiagramStore);
+    private readonly documents = inject(DocumentTabs);
     /** Expanded walkthroughs. */
     readonly expanded = signal<ReadonlySet<string>>(new Set());
 
@@ -87,9 +89,16 @@ export class HelpDialog {
         this.dialog().nativeElement.close();
     }
 
+    /**
+     * Closes when the backdrop (the dialog element itself) is clicked. Returns nothing: an Angular
+     * handler returning false cancels the event, which would stop file pickers and links inside.
+     */
+    backdropClick(event: MouseEvent): void {
+        if (event.target === this.dialog().nativeElement) this.close();
+    }
+
     loadExample(id: string): void {
-        if (this.store.dirty() && !confirm('Discard the changes to the current diagram?')) return;
-        this.store.loadExample(id);
+        this.documents.openExample(id);
         this.close();
     }
 

@@ -52,6 +52,8 @@ export interface CodeReport {
 const WANTED = /(\.(ts|tsx|mts|cts|py|html|java|kts?|groovy|gradle|scala|sc|c|h|cpp|cc|cxx|hpp|hh|hxx|cs|go|rs|swift|rb|php|R|r)|(^|\/)(package\.json|provenflow\.config\.json|go\.mod|Cargo\.toml|pom\.xml|build\.gradle(\.kts)?|DESCRIPTION|composer\.json|Gemfile))$/;
 const SKIPPED_DIR = /(^|\/)(node_modules|\.git|dist|out|build|\.angular|\.venv|venv|__pycache__|\.provenflow|coverage|target|bin|obj|vendor|\.gradle|\.idea|renv|Pods|DerivedData)\//;
 const MAX_FILES = 5000;
+/** The last report is kept in the browser, so its models stay one click away after a reload. */
+const REPORT_KEY = 'provenflow.code-report';
 const MAX_FILE_BYTES = 1_000_000;
 
 /** Sends a code base to the server (`pflow extract`) and keeps its report. */
@@ -60,7 +62,7 @@ export class CodeImport {
     readonly running = signal(false);
     readonly progress = signal('');
     readonly error = signal<string | null>(null);
-    readonly report = signal<CodeReport | null>(null);
+    readonly report = signal<CodeReport | null>(loadReport());
     /** The server can read a folder by path (it runs on this machine). */
     readonly pathsAllowed = signal(false);
 
@@ -110,7 +112,9 @@ export class CodeImport {
             const res = await fetch('api/extract', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
             const json = (await res.json()) as CodeReport & { error?: string };
             if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
-            this.report.set(name ? { ...json, root: name } : json);
+            const report = name ? { ...json, root: name } : json;
+            this.report.set(report);
+            saveReport(report);
         } catch (error) {
             this.error.set(`The analysis failed: ${(error as Error).message}`);
         } finally {
@@ -119,8 +123,31 @@ export class CodeImport {
         }
     }
 
+    /** Back to choosing a folder; the last report stays available until a new analysis replaces it. */
     clear(): void {
         this.report.set(null);
         this.error.set(null);
+    }
+
+    /** The last report, when it was cleared to start a new analysis that was then abandoned. */
+    restore(): void {
+        if (!this.report()) this.report.set(loadReport());
+    }
+}
+
+function loadReport(): CodeReport | null {
+    try {
+        const raw = localStorage.getItem(REPORT_KEY);
+        return raw ? (JSON.parse(raw) as CodeReport) : null;
+    } catch {
+        return null;
+    }
+}
+
+function saveReport(report: CodeReport): void {
+    try {
+        localStorage.setItem(REPORT_KEY, JSON.stringify(report));
+    } catch {
+        // Too large for the browser's storage: the report is kept until the page is reloaded.
     }
 }
