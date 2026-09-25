@@ -41,7 +41,7 @@ describe('Python generator', () => {
 });
 
 describe.skipIf(!python)('generated Python (runs with the system Python)', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'nxd-py-'));
+    const dir = mkdtempSync(join(tmpdir(), 'pflow-py-'));
     const run = (script: string) => execFileSync(python!, ['-c', script], { cwd: dir, encoding: 'utf8' });
 
     it.each(EXAMPLES.map(e => [e.id]))('%s: compiles, rejects illegal events, and random walks never trip a monitor', async id => {

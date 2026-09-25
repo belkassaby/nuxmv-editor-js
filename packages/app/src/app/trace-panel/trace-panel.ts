@@ -1,6 +1,6 @@
 import { KeyValuePipe } from '@angular/common';
 import { Component, computed, inject, OnDestroy, signal } from '@angular/core';
-import { checkConformance, parseTrace } from '@nuxmv-editor/language';
+import { checkConformance, parseTrace } from '@provenflow/language';
 import { DiagramStore } from '../diagram-store';
 import { pickFile } from '../file-io';
 import { HelpService } from '../help-dialog/help.service';

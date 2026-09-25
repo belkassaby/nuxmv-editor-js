@@ -9,7 +9,7 @@ import { StateDiagramGrammar } from './grammar.js';
 
 export const StateDiagramLanguageMetaData = {
     languageId: 'state-diagram',
-    fileExtensions: ['.nxd'],
+    fileExtensions: ['.pflow'],
     caseInsensitive: false,
     mode: 'development'
 } as const satisfies LanguageMetaData;

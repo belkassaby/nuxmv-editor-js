@@ -19,3 +19,9 @@ nuxmv_agentic_fsm_guide.pdf
 agentic_coding_fsm_guide.pdf
 education_agent_fsm_guide.pdf
 packages/language/test/.generated/
+# Files generated or downloaded while trying the tool (keep them out of the repository)
+/*_fsm.py
+/*_fsm*.ipynb
+/*_live_demo.py
+/test_*_fsm.py
+.idea/

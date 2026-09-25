@@ -1,5 +1,5 @@
 import { Component, computed, inject, signal } from '@angular/core';
-import { attributeDomain, type AttributeDef, type AttributeType } from '@nuxmv-editor/language';
+import { attributeDomain, type AttributeDef, type AttributeType } from '@provenflow/language';
 import { DiagramStore } from '../diagram-store';
 import { pickFile } from '../file-io';
 import { HelpService } from '../help-dialog/help.service';

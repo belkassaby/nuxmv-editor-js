@@ -1,5 +1,5 @@
 import { effect, Injectable, inject, signal } from '@angular/core';
-import { exportToFramework, generateNotebook, generatePython, generatePythonTests, walkThrough, type Framework, type GeneratedPython } from '@nuxmv-editor/language';
+import { exportToFramework, generateNotebook, generatePython, generatePythonTests, walkThrough, type Framework, type GeneratedPython } from '@provenflow/language';
 import { DiagramStore } from './diagram-store';
 import { downloadText } from './file-io';
 
@@ -74,7 +74,7 @@ export class CodeExport {
 
 # --------------------------------------------------------------------------
 # Live demo: run   python3 ${py.moduleName}_live_demo.py
-# The diagram in nuxmv-editor (Trace -> Live from Python, channel "${channel}") follows this process.
+# The diagram in provenflow (Trace -> Live from Python, channel "${channel}") follows this process.
 # --------------------------------------------------------------------------
 if __name__ == "__main__":
     import sys

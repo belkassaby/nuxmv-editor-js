@@ -1,5 +1,5 @@
 import { Component, computed, effect, HostListener, inject, OnInit, signal, viewChild } from '@angular/core';
-import { EXAMPLES, importGraph, serializeDiagram } from '@nuxmv-editor/language';
+import { EXAMPLES, importGraph, serializeDiagram } from '@provenflow/language';
 import { AttributeTable } from './attribute-table/attribute-table';
 import { CodeExport } from './code-export';
 import { DiagramCanvas } from './diagram-canvas/diagram-canvas';
@@ -17,7 +17,7 @@ import { TracePanel } from './trace-panel/trace-panel';
 
 type Tab = 'attributes' | 'properties' | 'trace' | 'model' | 'python' | 'console';
 
-const SIZES_KEY = 'nuxmv-editor.pane-sizes';
+const SIZES_KEY = 'provenflow.pane-sizes';
 const DEFAULT_SIZES = { text: 440, inspector: 280, bottom: 320 };
 const MIN = { text: 220, inspector: 180, bottom: 120, canvasW: 320, canvasH: 200 };
 
@@ -154,8 +154,9 @@ export class App implements OnInit {
 
     async open(): Promise<void> {
         if (!this.confirmDiscard()) return;
-        const file = await pickFile('.nxd,.txt');
-        if (file) this.store.load(file.text, file.name);
+        // .nxd is the extension used before ProvenFlow: still opened, saved as .pflow.
+        const file = await pickFile('.pflow,.nxd,.txt');
+        if (file) this.store.load(file.text, file.name.replace(/\.nxd$/, '.pflow'));
     }
 
     /** Imports an existing LangGraph / CrewAI / Mermaid / XState graph as a new diagram. */
@@ -165,7 +166,7 @@ export class App implements OnInit {
         if (!file) return;
         try {
             const result = importGraph(file.text);
-            this.store.load(serializeDiagram(result.model), file.name.replace(/\.[^.]+$/, '') + '.nxd');
+            this.store.load(serializeDiagram(result.model), file.name.replace(/\.[^.]+$/, '') + '.pflow');
             this.flash(`Imported ${file.name} (${result.format})${result.notes.length ? `: ${result.notes[0]}` : ''}`);
         } catch (error) {
             this.flash(`Could not import ${file.name}: ${(error as Error).message}`);
@@ -181,7 +182,7 @@ export class App implements OnInit {
     exportSmv(): void {
         const g = this.store.generated();
         if (g.error) return this.flash(g.error);
-        downloadText(this.store.fileName().replace(/\.nxd$/, '') + '.smv', g.text);
+        downloadText(this.store.fileName().replace(/\.(pflow|nxd)$/, '') + '.smv', g.text);
     }
 
     exportPng(): void {

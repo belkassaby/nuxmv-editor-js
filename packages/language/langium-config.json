@@ -4,7 +4,7 @@
     {
       "id": "state-diagram",
       "grammar": "src/state-diagram.langium",
-      "fileExtensions": [".nxd"],
+      "fileExtensions": [".pflow"],
       "textMate": {
         "out": "syntaxes/state-diagram.tmLanguage.json"
       }

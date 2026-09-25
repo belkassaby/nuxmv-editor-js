@@ -1,5 +1,5 @@
 /******************************************************************************
- * State Diagram language (.nxd)
+ * State Diagram language (.pflow)
  *
  * A textual description of an unlabelled, directed, finite state transition
  * system M = (S, ->, L) together with the atoms/attributes labelling each

@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import express, { type NextFunction, type Request, type Response } from 'express';
-import { generateSmv, GenerationError, parseDiagram } from '@nuxmv-editor/language';
+import { generateSmv, GenerationError, parseDiagram } from '@provenflow/language';
 import { ENGINES, nuxmvInfo, runNuxmv, type Engine, type RunnerConfig } from './nuxmv-runner.js';
 import { nurvAvailable, runNurv } from './nurv-runner.js';
 
@@ -43,7 +43,7 @@ export function createApp(options: AppOptions): express.Express {
             const executable = options.nurv;
             if (!executable || !nurvAvailable(executable)) throw new HttpError(503, 'NuRV is not configured: set NURV_PATH to the NuRV executable (https://es-static.fbk.eu/tools/nurv/).');
             const body = (req.body ?? {}) as { diagram?: unknown };
-            if (typeof body.diagram !== 'string') throw new HttpError(400, "Provide 'diagram' (.nxd text).");
+            if (typeof body.diagram !== 'string') throw new HttpError(400, "Provide 'diagram' (.pflow text).");
             const parsed = await parseDiagram(body.diagram);
             if (parsed.hasErrors) throw new HttpError(422, 'The diagram has errors.', parsed.diagnostics.filter(d => d.severity === 'error'));
             const result = await runNurv(parsed.model, executable);
@@ -56,7 +56,7 @@ export function createApp(options: AppOptions): express.Express {
     /**
      * POST /api/verify
      *   { model: "<nuXmv model>" }            run a model as is, or
-     *   { diagram: "<.nxd source>" }          generate the model from a diagram first
+     *   { diagram: "<.pflow source>" }          generate the model from a diagram first
      *   engine?: "bdd" | "bmc" | "ic3", bound?: number
      */
     app.post('/api/verify', async (req: Request, res: Response, next: NextFunction) => {
@@ -78,7 +78,7 @@ export function createApp(options: AppOptions): express.Express {
                 }
                 model = generateSmv(parsed.model).text;
             } else {
-                throw new HttpError(400, "Provide either 'model' (nuXmv text) or 'diagram' (.nxd text).");
+                throw new HttpError(400, "Provide either 'model' (nuXmv text) or 'diagram' (.pflow text).");
             }
 
             if (running >= maxRuns) throw new HttpError(429, 'nuXmv is busy, try again in a moment.');

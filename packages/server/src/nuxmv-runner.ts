@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { parseNuxmvOutput, type NuxmvOutput } from '@nuxmv-editor/language';
+import { parseNuxmvOutput, type NuxmvOutput } from '@provenflow/language';
 
 export type Engine = 'bdd' | 'bmc' | 'ic3';
 export const ENGINES: Engine[] = ['bdd', 'bmc', 'ic3'];
@@ -59,7 +59,7 @@ function ic3Script(bound: number): string {
 export async function runNuxmv(model: string, options: RunOptions, config: RunnerConfig): Promise<RunResult> {
     const engine = options.engine ?? 'bdd';
     const bound = Math.max(1, Math.min(1000, Math.floor(options.bound ?? 10)));
-    const dir = await mkdtemp(join(tmpdir(), 'nuxmv-editor-'));
+    const dir = await mkdtemp(join(tmpdir(), 'provenflow-'));
     try {
         const modelFile = join(dir, 'model.smv');
         await writeFile(modelFile, model, 'utf8');

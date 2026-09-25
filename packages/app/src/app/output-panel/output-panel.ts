@@ -1,5 +1,5 @@
 import { Component, computed, inject, input, signal } from '@angular/core';
-import { FRAMEWORKS, type Framework } from '@nuxmv-editor/language';
+import { FRAMEWORKS, type Framework } from '@provenflow/language';
 import { CodeExport } from '../code-export';
 import { NuxmvApi } from '../nuxmv-api';
 import { HelpService } from '../help-dialog/help.service';
@@ -36,7 +36,7 @@ export class OutputPanel {
     });
 
     fileBase(): string {
-        return this.store.fileName().replace(/\.nxd$/, '');
+        return this.store.fileName().replace(/\.(pflow|nxd)$/, '');
     }
 
     download(): void {

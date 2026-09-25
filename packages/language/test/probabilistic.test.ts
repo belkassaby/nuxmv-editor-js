@@ -59,7 +59,7 @@ describe('probabilistic analysis', () => {
 const prism = process.env['PRISM_PATH'];
 describe.skipIf(!prism || !existsSync(prism))('PRISM', () => {
     it('computes the same values from the exported model', async () => {
-        const dir = mkdtempSync(join(tmpdir(), 'nxd-prism-'));
+        const dir = mkdtempSync(join(tmpdir(), 'pflow-prism-'));
         const out = await exportPrism(await model('agent-retry-data'), queries);
         writeFileSync(join(dir, 'model.pm'), out.model);
         writeFileSync(join(dir, 'props.pctl'), out.properties);

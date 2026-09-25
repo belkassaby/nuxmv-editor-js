@@ -1,14 +1,14 @@
 import { afterNextRender, Component, computed, effect, ElementRef, inject, input, OnDestroy, output, signal, untracked, viewChild } from '@angular/core';
 import cytoscape, { type Core, type EdgeSingular, type ElementDefinition, type EventObject, type NodeSingular, type StylesheetJson } from 'cytoscape';
 import edgehandles from 'cytoscape-edgehandles';
-import type { DiagramModel } from '@nuxmv-editor/language';
+import type { DiagramModel } from '@provenflow/language';
 import { DiagramStore, type Highlight, type Selection } from '../diagram-store';
 import { LiveLink } from '../live-link';
 import { downloadText } from '../file-io';
 import { computeLayout, LAYOUTS, type LayoutKind } from './layouts';
 import { cytoscapeToSvg } from './svg-export';
 
-const LAYOUT_KEY = 'nuxmv-editor.layout';
+const LAYOUT_KEY = 'provenflow.layout';
 
 cytoscape.use(edgehandles);
 
@@ -345,7 +345,7 @@ export class DiagramCanvas implements OnDestroy {
     }
 
     private baseName(): string {
-        return this.store.fileName().replace(/\.nxd$/, '');
+        return this.store.fileName().replace(/\.(pflow|nxd)$/, '');
     }
 
     ngOnDestroy(): void {

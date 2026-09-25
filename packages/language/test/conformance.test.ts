@@ -85,7 +85,7 @@ describe.skipIf(!python)('recorded Python runs', () => {
     it('a run recorded by the generated runtime conforms to its diagram', async () => {
         const m = await model('agent-retry-data');
         const py = await generatePython(m);
-        const dir = mkdtempSync(join(tmpdir(), 'nxd-conf-'));
+        const dir = mkdtempSync(join(tmpdir(), 'pflow-conf-'));
         writeFileSync(join(dir, `${py.moduleName}.py`), py.code);
         execFileSync(python!, ['-c', `
 import random, ${py.moduleName} as m

@@ -1,12 +1,13 @@
 {
-  "name": "@nuxmv-editor/server",
+  "name": "@provenflow/server",
   "version": "0.1.0",
   "private": true,
-  "description": "Node.js backend that runs nuXmv on generated models, plus the nxd command-line tool.",
+  "description": "Node.js backend that runs nuXmv on generated models, plus the pflow command-line tool.",
   "type": "module",
   "main": "./out/index.js",
   "bin": {
-    "nxd": "./out/cli.js"
+    "pflow": "./out/cli.js",
+    "provenflow": "./out/cli.js"
   },
   "scripts": {
     "build": "tsc -b tsconfig.json",
@@ -16,7 +17,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@nuxmv-editor/language": "0.1.0",
+    "@provenflow/language": "0.1.0",
     "express": "^5.2.1"
   },
   "devDependencies": {

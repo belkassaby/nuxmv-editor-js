@@ -1,5 +1,5 @@
 import { Component, computed, inject } from '@angular/core';
-import type { FairnessKind, SpecKind } from '@nuxmv-editor/language';
+import type { FairnessKind, SpecKind } from '@provenflow/language';
 import { DiagramStore } from '../diagram-store';
 import { HelpService } from '../help-dialog/help.service';
 import { ProbabilityPanel } from '../probability-panel/probability-panel';

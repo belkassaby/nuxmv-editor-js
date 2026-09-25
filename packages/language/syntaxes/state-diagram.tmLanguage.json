@@ -2,7 +2,7 @@
   "name": "state-diagram",
   "scopeName": "source.state-diagram",
   "fileTypes": [
-    ".nxd"
+    ".pflow"
   ],
   "patterns": [
     {

@@ -1,5 +1,5 @@
 import { Component, computed, effect, inject, signal, untracked } from '@angular/core';
-import { analyse, exportPrism, type ProbabilisticQuery, type ProbabilisticResult } from '@nuxmv-editor/language';
+import { analyse, exportPrism, type ProbabilisticQuery, type ProbabilisticResult } from '@provenflow/language';
 import { DiagramStore } from '../diagram-store';
 import { downloadText } from '../file-io';
 import { HelpService } from '../help-dialog/help.service';
@@ -97,7 +97,7 @@ export class ProbabilityPanel {
     async exportPrism(): Promise<void> {
         try {
             const out = await exportPrism(this.store.model(), this.queries());
-            const base = this.store.fileName().replace(/\.nxd$/, '');
+            const base = this.store.fileName().replace(/\.(pflow|nxd)$/, '');
             downloadText(`${base}.pm`, out.model);
             downloadText(`${base}.pctl`, out.properties);
         } catch (e) {

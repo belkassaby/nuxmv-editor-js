@@ -1,7 +1,7 @@
 import { attributeTypeToString, type DiagramModel, type StateDef } from './model.js';
 
 /**
- * Writes a {@link DiagramModel} back to `.nxd` text. Used whenever the diagram
+ * Writes a {@link DiagramModel} back to `.pflow` text. Used whenever the diagram
  * is edited graphically so that the text editor always mirrors the drawing.
  */
 export function serializeDiagram(model: DiagramModel): string {

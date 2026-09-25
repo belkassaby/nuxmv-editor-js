@@ -49,7 +49,7 @@ const python = ['python3', 'python'].find(cmd => spawnSync(cmd, ['--version']).s
 const has = (mod: string) => !!python && spawnSync(python, ['-c', `import ${mod}`]).status === 0;
 
 describe.skipIf(!python)('Python framework exports', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'nxd-fw-'));
+    const dir = mkdtempSync(join(tmpdir(), 'pflow-fw-'));
     const setup = async (id: string) => {
         const m = await model(id);
         const py = await generatePython(m);

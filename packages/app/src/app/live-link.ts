@@ -1,5 +1,5 @@
 import { Injectable, inject, signal } from '@angular/core';
-import { transitionEvents } from '@nuxmv-editor/language';
+import { transitionEvents } from '@provenflow/language';
 import { DiagramStore } from './diagram-store';
 
 export interface LiveUpdate {

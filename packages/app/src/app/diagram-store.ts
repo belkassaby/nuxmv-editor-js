@@ -20,7 +20,7 @@ import {
     type Position,
     type SpecResult,
     type Trace
-} from '@nuxmv-editor/language';
+} from '@provenflow/language';
 
 export type Selection = { kind: 'state'; name: string } | { kind: 'transition'; index: number } | null;
 
@@ -58,7 +58,7 @@ export interface Verification {
 }
 
 /**
- * Central state of the editor. The `.nxd` text (edited with the Langium
+ * Central state of the editor. The `.pflow` text (edited with the Langium
  * powered editor) and the diagram model (edited on the Cytoscape canvas) are
  * kept in sync: text edits are parsed into the model, diagram edits are
  * serialised back to text.
@@ -73,7 +73,7 @@ export class DiagramStore {
     readonly diagnosedText = signal('');
     readonly hasSyntaxErrors = signal(false);
     readonly selection = signal<Selection>(null);
-    readonly fileName = signal('diagram.nxd');
+    readonly fileName = signal('diagram.pflow');
     readonly dirty = signal(false);
     readonly verification = signal<Verification | null>(null);
     /** The trace being replayed: a nuXmv counterexample (specIndex >= 0) or a recorded run (-1). */
@@ -310,12 +310,12 @@ export class DiagramStore {
     // ------------------------------------------------------------- documents
 
     newDiagram(): void {
-        this.load(serializeDiagram(emptyDiagram('untitled')), 'untitled.nxd');
+        this.load(serializeDiagram(emptyDiagram('untitled')), 'untitled.pflow');
     }
 
     loadExample(id: string): void {
         const example = EXAMPLES.find(e => e.id === id) ?? EXAMPLES[0];
-        this.load(example.source, `${example.id}.nxd`);
+        this.load(example.source, `${example.id}.pflow`);
     }
 
     load(text: string, fileName: string): void {

@@ -1,9 +1,15 @@
-# nuxmv-editor-js
+# ProvenFlow
 
-A browser-based diagram editor for the [nuXmv](https://nuxmv.fbk.eu) model checker. Draw a directed
-finite state transition system, or type it, label its states with atoms, write LTL, CTL or invariant
-properties, and check them with nuXmv. When a property is false, the counterexample is replayed step
-by step on the diagram.
+Design, verify and run state machines for LLM agents. ProvenFlow is a browser-based diagram editor
+for the [nuXmv](https://nuxmv.fbk.eu) model checker. Draw a directed finite state transition system,
+or type it in a `.pflow` file, label its states with atoms, write LTL, CTL or invariant properties,
+and check them with nuXmv. When a property is false, the counterexample is replayed step by step on
+the diagram. From the same diagram it generates a Python runtime with monitors, live views in the
+editor or Jupyter, trace conformance checks and probabilistic analysis. The `pflow` command-line tool
+does the same from a terminal or CI.
+
+The project was called `nuxmv-editor-js` until it was renamed, and diagrams used the `.nxd` extension.
+The editor still opens `.nxd` files and saves them as `.pflow`.
 
 ![Counterexample of the mutual exclusion liveness property replayed on the diagram](docs/counterexample.png)
 
@@ -12,11 +18,11 @@ This project re-implements **JungToNusmv**, the tool described in the MSc disser
 Liverpool, 2007), with a current web stack. It also implements the dissertation's "future
 developments" and removes the limitations listed in its evaluation chapter.
 
-| 2007 (JungToNusmv)                                 | Now (nuxmv-editor-js)                                              |
+| 2007 (JungToNusmv)                                 | Now (ProvenFlow)                                              |
 | -------------------------------------------------- | ------------------------------------------------------------------ |
 | Java Swing GUI                                     | Angular 22 (standalone components, signals, zoneless)              |
 | JUNG 1.7 graph editor                              | Cytoscape.js + cytoscape-edgehandles                               |
-| `GraphMapping` / `NusmvFileWriter` (string arrays) | Langium 4 grammar (`.nxd`), typed diagram model, nuXmv generator   |
+| `GraphMapping` / `NusmvFileWriter` (string arrays) | Langium 4 grammar (`.pflow`), typed diagram model, nuXmv generator   |
 | `attributeData.txt`, edited by hand                | Attribute table (the planned Fig. 4.6 interface); the old file format can still be imported |
 | `Runtime.exec` of NuSMV 2.4                        | Node.js/Express backend that runs nuXmv 2.x                        |
 | Output copied into a text area                     | Verdicts parsed per property; counterexamples shown on the graph   |
@@ -49,7 +55,7 @@ developments" and removes the limitations listed in its evaluation chapter.
   notation, how to write it here, meaning), has a searchable glossary of model checking terms, and
   links to references, including the
   [nomenclature of logic symbols](https://en.wikipedia.org/wiki/List_of_logic_symbols).
-- **Files.** Save and open `.nxd` files, export the `.smv` model, import the legacy
+- **Files.** Save and open `.pflow` files, export the `.smv` model, import the legacy
   `attributeData.txt` format, and load the built-in examples.
 - **Guards and bounded data.** Variables (counters, flags) updated by transitions
   (`when retries < 2 do retries := retries + 1`), checked by nuXmv, simulated in the editor and
@@ -71,7 +77,7 @@ developments" and removes the limitations listed in its evaluation chapter.
 | Only the first state created can be initial                 | Any number of initial states: `init(state) := {s0, s2}`       |
 | Dead-end states produce `state = s0 : {};` (parser error)   | Dead ends stutter (`state = s0 : s0;`) and a warning is shown |
 | Attribute interface not connected                           | Attribute table plus per-state inspector                      |
-| No open/save                                                | `.nxd` text format (it also keeps the layout)                 |
+| No open/save                                                | `.pflow` text format (it also keeps the layout)                 |
 | LTL only                                                    | LTL, CTL, invariants, fairness                                |
 | Tool tips show only the state name                          | Tool tips show all attribute values of the state              |
 | No simulation, no graphical counterexample ("NusmvToJung")  | Both are implemented                                          |
@@ -119,7 +125,7 @@ running, whether a human is being waited on, which agent is active. Two rules ke
 - **Give terminal states a self-loop** (`done -> done;`). nuXmv reasons about infinite paths; a state
   without a successor is reported as a dead end and made to stutter.
 
-Example: a reflection loop with a budget of two refinements (`examples/agent-reflection-loop.nxd`,
+Example: a reflection loop with a budget of two refinements (`examples/agent-reflection-loop.pflow`,
 also under *Examples → Agentic AI patterns*):
 
 ```
@@ -207,11 +213,11 @@ by hand when a trace needs more context.
 
 Nothing is generated for you. Implement the verified design in your runtime with the same states
 and transitions: in XState each `state` becomes a state node and each transition an `onDone`/`on`
-target with its guard. Keep the `.nxd` file next to the code as its specification, and re-check it
+target with its guard. Keep the `.pflow` file next to the code as its specification, and re-check it
 in CI whenever the agent's flow changes:
 
 ```sh
-NUXMV_PATH=/opt/nuXmv/bin/nuXmv npx nxd check agent.nxd   # exit 0: all hold, 3: a property is false, 1: error
+NUXMV_PATH=/opt/nuXmv/bin/nuXmv npx pflow check agent.pflow   # exit 0: all hold, 3: a property is false, 1: error
 ```
 
 For a CI gate, keep only must-hold properties in the checked file. Properties that are false by
@@ -227,7 +233,7 @@ such as approvals, counters and the active agent, as attributes so they can be c
 ## From verified diagram to running code
 
 A verified design is only useful if the running system follows it. Everything below is generated
-from the diagram, from the **Python** tab, the **File** menu or the `nxd` command line.
+from the diagram, from the **Python** tab, the **File** menu or the `pflow` command line.
 
 ### Python runtime
 
@@ -263,7 +269,7 @@ fsm.send("HUMAN_APPROVED")             # InvalidTransition: not allowed in state
 
 ### Jupyter, live link and conformance
 
-- **Notebook** (`.ipynb`, `nxd notebook diagram.nxd --verify`). It writes the module and shows
+- **Notebook** (`.ipynb`, `pflow notebook diagram.pflow --verify`). It writes the module and shows
   the machine as a diagram with its current state. It adds a **live widget** (anywidget and
   Cytoscape.js) that follows every transition, a walk through the model, a rejected illegal event,
   the LLM tool-schema pattern and hooks, and replays of the nuXmv counterexamples.
@@ -271,7 +277,7 @@ fsm.send("HUMAN_APPROVED")             # InvalidTransition: not allowed in state
   the editor's *Trace → Live from Python* view shows the running state, the next possible states
   and the rejected events. It can send events back: click a highlighted next state or an
   *▶ EVENT* button, e.g. a person approving a step. Commands still go through `send()`.
-- **Trace conformance.** Use *Trace → Check a recorded run* or `nxd conform diagram.nxd run.jsonl`.
+- **Trace conformance.** Use *Trace → Check a recorded run* or `pflow conform diagram.pflow run.jsonl`.
   It reads JSON Lines from `record_to()`, any log with a `state` field, or OpenTelemetry spans.
   Every step must follow an enabled transition, with the recorded event and values, and the
   monitored properties must hold. Problems are listed and the run is replayed on the diagram;
@@ -279,12 +285,12 @@ fsm.send("HUMAN_APPROVED")             # InvalidTransition: not allowed in state
 
 ### Property-based tests, framework exports, full-LTL monitors
 
-- **Property-based tests** (`test_<name>_fsm.py`, `nxd pytest [--verify]`). A Hypothesis
+- **Property-based tests** (`test_<name>_fsm.py`, `pflow pytest [--verify]`). A Hypothesis
   `RuleBasedStateMachine` fires random allowed events. Each move must match the verified table,
   illegal events must be rejected without side effects, and monitors and variable domains must
   hold. The walk-through and the nuXmv counterexamples are replayed as scenarios. Point `FSM` at
   your subclass to test your hooks and glue code.
-- **Framework exports** (Python tab → *Export to…*, `nxd export <framework>`):
+- **Framework exports** (Python tab → *Export to…*, `pflow export <framework>`):
 
   | Target | What you get |
   | --- | --- |
@@ -295,7 +301,7 @@ fsm.send("HUMAN_APPROVED")             # InvalidTransition: not allowed in state
 
   The Python targets import the generated `<name>_fsm.py`, so the verified table stays the single
   source of truth. Each is tested by running it in its framework.
-- **NuRV monitors** (Python tab → *NuRV monitors*, `nxd nurv diagram.nxd -o dir`, needs
+- **NuRV monitors** (Python tab → *NuRV monitors*, `pflow nurv diagram.pflow -o dir`, needs
   `NURV_PATH` and a C compiler). [NuRV](https://es-static.fbk.eu/tools/nurv/), built on nuXmv,
   generates monitors for the future-time LTL properties. They monitor *under the model's
   assumptions*: a verdict becomes true or false as soon as the observed run decides the property
@@ -325,7 +331,7 @@ probability 1.
 
 ## Importing existing agents
 
-*File → Import agent graph* (`nxd import`) turns an existing graph into a diagram, which you then
+*File → Import agent graph* (`pflow import`) turns an existing graph into a diagram, which you then
 annotate with atoms and properties and verify. It reads:
 - LangGraph's `get_graph().to_json()` and `draw_mermaid()`;
 - Mermaid `flowchart` and `stateDiagram`;
@@ -341,11 +347,11 @@ For how this compares with other tools, see [docs/state-of-the-art.md](docs/stat
 
 ```
 packages/
-├── language/   @nuxmv-editor/language  (runs in the browser and in Node)
-│   ├── src/state-diagram.langium       grammar of the .nxd language
+├── language/   @provenflow/language  (runs in the browser and in Node)
+│   ├── src/state-diagram.langium       grammar of the .pflow language
 │   ├── src/state-diagram-validator.ts  types, names, dead ends, LTL/CTL checks
 │   ├── src/model.ts                    DiagramModel: the shared data structure
-│   ├── src/serializer.ts               DiagramModel -> .nxd text
+│   ├── src/serializer.ts               DiagramModel -> .pflow text
 │   ├── src/smv-generator.ts            DiagramModel -> nuXmv model
 │   ├── src/nuxmv-output.ts             nuXmv output -> verdicts + traces
 │   ├── src/semantics.ts                executable semantics: guards, updates, past-time monitors
@@ -358,12 +364,12 @@ packages/
 │   ├── src/nurv.ts                     NuRV monitor synthesis plan
 │   ├── src/notebook-generator.ts       DiagramModel -> Jupyter notebook
 │   └── src/legacy-attributes.ts        import of JungToNusmv attributeData.txt
-├── server/     @nuxmv-editor/server    Node.js + Express
+├── server/     @provenflow/server    Node.js + Express
 │   ├── src/nuxmv-runner.ts             spawns nuXmv (BDD / BMC / IC3), timeouts
 │   ├── src/nurv-runner.ts              runs NuRV, fixes and returns the generated monitors
 │   ├── src/app.ts                      REST API, live channel (SSE), serves the built UI
-│   └── src/cli.ts                      `nxd generate|check`
-└── app/        @nuxmv-editor/app       Angular UI
+│   └── src/cli.ts                      `pflow generate|check`
+└── app/        @provenflow/app       Angular UI
     └── src/app/
         ├── diagram-store.ts            signals store keeping text and diagram in sync
         ├── text-editor/                CodeMirror + Langium diagnostics
@@ -373,7 +379,7 @@ packages/
 ```
 
 ```
- .nxd text ──Langium parse/validate──▶ DiagramModel ◀──edits── Cytoscape diagram
+ .pflow text ──Langium parse/validate──▶ DiagramModel ◀──edits── Cytoscape diagram
      ▲                                     │
      └────────────── serialize ────────────┤
                                            ▼
@@ -440,7 +446,7 @@ browser.
 | `NUXMV_MAX_OUTPUT_BYTES` | `5000000`                     | Output kept per run                           |
 | `STATIC_DIR`             | `packages/app/dist/app/browser` | Built UI served on `/`                      |
 
-## The `.nxd` language
+## The `.pflow` language
 
 ```
 // Resource monitor (Huth & Ryan, Logic in Computer Science, ch. 3)
@@ -513,8 +519,8 @@ LTLSPEC
 ## Command line
 
 ```sh
-npx nxd generate examples/mutex.nxd -o mutex.smv
-NUXMV_PATH=/path/to/nuXmv npx nxd check examples/mutex.nxd --engine bdd
+npx pflow generate examples/mutex.pflow -o mutex.smv
+NUXMV_PATH=/path/to/nuXmv npx pflow check examples/mutex.pflow --engine bdd
 #   true        CTLSPEC safety := AG !(p1 = c & p2 = c)
 #   false       LTLSPEC liveness := G (p1 = t -> F p1 = c)
 #                 1.1: state = s0
@@ -525,24 +531,24 @@ NUXMV_PATH=/path/to/nuXmv npx nxd check examples/mutex.nxd --engine bdd
 
 | Command | What it does |
 | --- | --- |
-| `nxd generate <d.nxd> [-o m.smv]` | write the nuXmv model |
-| `nxd check <d.nxd> [--engine bdd\|bmc\|ic3] [--bound N]` | verify the properties (exit 3 if one is false) |
-| `nxd python <d.nxd> [-o m.py]` | Python implementation with runtime monitors |
-| `nxd notebook <d.nxd> [--verify]` | Jupyter notebook (with verdicts and counterexamples when `--verify`) |
-| `nxd pytest <d.nxd> [--verify]` | Hypothesis property-based tests |
-| `nxd export <xstate\|langgraph\|burr\|temporal> <d.nxd>` | framework code |
-| `nxd import <graph> [-o d.nxd]` | LangGraph / CrewAI / Mermaid / XState graph to a diagram |
-| `nxd conform <d.nxd> <run.jsonl\|otel.json>` | check a recorded run (exit 4 if it deviates) |
-| `nxd prob <d.nxd> --reach EXPR [--within K] [--steps EXPR] [--visits EXPR --until EXPR]` | probabilistic analysis |
-| `nxd prism <d.nxd> [-o m.pm]` | PRISM / Storm model and properties |
-| `nxd nurv <d.nxd> [-o dir]` | NuRV full-LTL monitors (`NURV_PATH`) |
+| `pflow generate <d.pflow> [-o m.smv]` | write the nuXmv model |
+| `pflow check <d.pflow> [--engine bdd\|bmc\|ic3] [--bound N]` | verify the properties (exit 3 if one is false) |
+| `pflow python <d.pflow> [-o m.py]` | Python implementation with runtime monitors |
+| `pflow notebook <d.pflow> [--verify]` | Jupyter notebook (with verdicts and counterexamples when `--verify`) |
+| `pflow pytest <d.pflow> [--verify]` | Hypothesis property-based tests |
+| `pflow export <xstate\|langgraph\|burr\|temporal> <d.pflow>` | framework code |
+| `pflow import <graph> [-o d.pflow]` | LangGraph / CrewAI / Mermaid / XState graph to a diagram |
+| `pflow conform <d.pflow> <run.jsonl\|otel.json>` | check a recorded run (exit 4 if it deviates) |
+| `pflow prob <d.pflow> --reach EXPR [--within K] [--steps EXPR] [--visits EXPR --until EXPR]` | probabilistic analysis |
+| `pflow prism <d.pflow> [-o m.pm]` | PRISM / Storm model and properties |
+| `pflow nurv <d.pflow> [-o dir]` | NuRV full-LTL monitors (`NURV_PATH`) |
 
 ## REST API
 
 | Method | Path          | Body                                                                                            |
 | ------ | ------------- | ----------------------------------------------------------------------------------------------- |
 | GET    | `/api/health` | returns nuXmv availability and version                                                          |
-| POST   | `/api/verify` | `{ "model": "<smv>" }` or `{ "diagram": "<nxd>" }`, plus `engine` (`bdd`/`bmc`/`ic3`) and `bound` |
+| POST   | `/api/verify` | `{ "model": "<smv>" }` or `{ "diagram": "<pflow text>" }`, plus `engine` (`bdd`/`bmc`/`ic3`) and `bound` |
 | POST   | `/api/live/<channel>` | a state update `{ state, event?, step?, values?, violations? }` from a running machine |
 | GET    | `/api/live/<channel>/stream` | Server-Sent Events stream of those updates (the last one first) |
 | POST   | `/api/live/<channel>/command` | `{ event }` sent to the running machine (two-way link) |

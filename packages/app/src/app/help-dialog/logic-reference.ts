@@ -3,7 +3,7 @@
 export interface LogicSymbol {
     /** Textbook notation. */
     symbol: string;
-    /** Spelling in nuXmv / .nxd, or '' when it has no direct syntax. */
+    /** Spelling in nuXmv / .pflow, or '' when it has no direct syntax. */
     syntax: string;
     name: string;
     meaning: string;
@@ -15,7 +15,7 @@ export interface GlossaryTerm {
     /** Other names or notations, also used by the search. */
     aka?: string;
     definition: string;
-    /** Formula or snippet in .nxd syntax. */
+    /** Formula or snippet in .pflow syntax. */
     example?: string;
 }
 

@@ -13,7 +13,7 @@ const runner = configFromEnv();
 
 const app = createApp({ runner, staticDir, nurv: nurvExecutable() });
 app.listen(port, host, async () => {
-    console.log(`nuxmv-editor server listening on http://${host}:${port}`);
+    console.log(`provenflow server listening on http://${host}:${port}`);
     const info = await nuxmvInfo(runner);
     if (info.available) console.log(`Using ${info.version ?? 'nuXmv'} (${info.executable})`);
     else console.warn(`nuXmv not available (${info.error}). Set NUXMV_PATH to the nuXmv executable.`);

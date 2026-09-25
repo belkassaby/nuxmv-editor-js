@@ -1,7 +1,7 @@
 import { Component, inject, output } from '@angular/core';
 import { DiagramStore } from '../diagram-store';
 
-/** Langium diagnostics of the `.nxd` text. */
+/** Langium diagnostics of the `.pflow` text. */
 @Component({
     selector: 'app-problems-list',
     template: `

@@ -23,7 +23,7 @@ import type { StateDiagramServices } from './state-diagram-module.js';
 
 const LTL_OPERATORS = new Set(['G', 'F', 'X', 'U', 'V', 'Y', 'Z', 'H', 'O', 'S', 'T']);
 
-/** Words reserved by the nuXmv input language that the .nxd grammar does not already reserve. */
+/** Words reserved by the nuXmv input language that the .pflow grammar does not already reserve. */
 export const NUXMV_RESERVED = new Set(
     (
         'MODULE DEFINE MDEFINE CONSTANTS VAR IVAR FROZENVAR INIT TRANS INVAR SPEC CTLSPEC LTLSPEC PSLSPEC COMPUTE ' +

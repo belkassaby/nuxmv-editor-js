@@ -1,8 +1,8 @@
 {
-  "name": "nuxmv-editor-js",
+  "name": "provenflow",
   "version": "0.1.0",
   "private": true,
-  "description": "Browser-based diagram editor for the nuXmv model checker: draw or type a state transition system, generate a nuXmv model, verify LTL/CTL/invariant properties and visualise counterexamples.",
+  "description": "ProvenFlow: design, verify (nuXmv) and run state machines for LLM agents: model checking with counterexample replay, generated runtimes with monitors, live views, trace conformance and probabilistic analysis.",
   "license": "MIT",
   "type": "module",
   "workspaces": [
@@ -14,11 +14,11 @@
     "node": ">=20.19"
   },
   "scripts": {
-    "langium:generate": "npm run langium:generate -w @nuxmv-editor/language",
-    "build": "npm run build -w @nuxmv-editor/language && npm run build -w @nuxmv-editor/server && npm run build -w @nuxmv-editor/app",
-    "dev": "npm run build -w @nuxmv-editor/language && concurrently -n server,app -c blue,magenta \"npm run dev -w @nuxmv-editor/server\" \"npm start -w @nuxmv-editor/app\"",
-    "start": "npm run start -w @nuxmv-editor/server",
-    "test": "npm test -w @nuxmv-editor/language && npm test -w @nuxmv-editor/server && npm test -w @nuxmv-editor/app -- --watch=false",
+    "langium:generate": "npm run langium:generate -w @provenflow/language",
+    "build": "npm run build -w @provenflow/language && npm run build -w @provenflow/server && npm run build -w @provenflow/app",
+    "dev": "npm run build -w @provenflow/language && concurrently -n server,app -c blue,magenta \"npm run dev -w @provenflow/server\" \"npm start -w @provenflow/app\"",
+    "start": "npm run start -w @provenflow/server",
+    "test": "npm test -w @provenflow/language && npm test -w @provenflow/server && npm test -w @provenflow/app -- --watch=false",
     "typecheck": "npm run typecheck --workspaces --if-present"
   },
   "devDependencies": {

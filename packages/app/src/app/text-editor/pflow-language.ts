@@ -6,9 +6,9 @@ const SECTIONS = new Set(['LTLSPEC', 'CTLSPEC', 'INVARSPEC', 'FAIRNESS', 'JUSTIC
 const TEMPORAL = new Set(['G', 'F', 'X', 'U', 'V', 'Y', 'Z', 'H', 'O', 'S', 'T', 'A', 'E', 'AG', 'AF', 'AX', 'EG', 'EF', 'EX']);
 const CONSTANTS = new Set(['TRUE', 'FALSE']);
 
-/** Syntax highlighting for `.nxd`; structure and errors come from Langium. */
-export const nxdLanguage = StreamLanguage.define<{ inComment: boolean }>({
-    name: 'nxd',
+/** Syntax highlighting for `.pflow`; structure and errors come from Langium. */
+export const pflowLanguage = StreamLanguage.define<{ inComment: boolean }>({
+    name: 'pflow',
     startState: () => ({ inComment: false }),
     token(stream, state) {
         if (state.inComment) {
@@ -45,7 +45,7 @@ export const nxdLanguage = StreamLanguage.define<{ inComment: boolean }>({
     languageData: { commentTokens: { line: '//', block: { open: '/*', close: '*/' } } }
 });
 
-export const nxdHighlight = syntaxHighlighting(
+export const pflowHighlight = syntaxHighlighting(
     HighlightStyle.define([
         { tag: tags.comment, color: 'var(--syntax-comment)', fontStyle: 'italic' },
         { tag: tags.keyword, color: 'var(--syntax-keyword)', fontWeight: '600' },

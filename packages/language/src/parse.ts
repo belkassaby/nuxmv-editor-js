@@ -37,10 +37,10 @@ function getServices() {
 
 const SEVERITIES: Record<number, Severity> = { 1: 'error', 2: 'warning', 3: 'info', 4: 'hint' };
 
-/** Parses and validates `.nxd` text with Langium. Works in the browser and in Node. */
+/** Parses and validates `.pflow` text with Langium. Works in the browser and in Node. */
 export async function parseDiagram(text: string): Promise<ParseOutcome> {
     const { shared } = getServices();
-    const uri = URI.parse(`memory:///diagram-${++counter}.nxd`);
+    const uri = URI.parse(`memory:///diagram-${++counter}.pflow`);
     const document: LangiumDocument<Diagram> = shared.workspace.LangiumDocumentFactory.fromString<Diagram>(text, uri);
     shared.workspace.LangiumDocuments.addDocument(document);
     try {

@@ -2,7 +2,7 @@
 
 export interface WalkthroughStep {
     text: string;
-    /** Optional code or .nxd snippet shown under the step. */
+    /** Optional code or .pflow snippet shown under the step. */
     code?: string;
 }
 
@@ -126,7 +126,7 @@ export const WALKTHROUGHS: Walkthrough[] = [
             { text: 'Record runs of the real system: fsm.record_to("run.jsonl") in the generated code, fsm.enable_tracing() for OpenTelemetry, or any JSON Lines log with a "state" field (and optionally "event" and "values").', code: '{"state": "work"}\n{"state": "test", "event": "code_written"}\n{"state": "work", "event": "tests_failed"}' },
             { text: 'Trace tab → Check a recorded run… and pick the file.' },
             { text: 'Each step must follow an enabled transition of the model (existing, guard true, right event, same values) and the monitored properties must hold. Problems are listed with their step; click one to jump there on the diagram.' },
-            { text: 'From a terminal: nxd conform diagram.nxd run.jsonl (exit code 4 when the run deviates), e.g. in CI or on production logs.' }
+            { text: 'From a terminal: pflow conform diagram.pflow run.jsonl (exit code 4 when the run deviates), e.g. in CI or on production logs.' }
         ]
     },
     {
@@ -176,7 +176,7 @@ export const WALKTHROUGHS: Walkthrough[] = [
             { text: 'Start the server with NURV_PATH pointing to NuRV (free for academic use, from es-static.fbk.eu/tools/nurv). The Python tab then shows a NuRV monitors button.' },
             { text: 'Download the monitors (one .py and .c per future-time LTL property) and build them next to the module.', code: 'cc -fPIC -shared -o libnurv_always_goes_live.so nurv_always_goes_live.c' },
             { text: 'Attach them to the machine. A verdict stays "unknown" until the run decides the property for every continuation the model allows, then becomes "true" or "false".', code: 'import nurv_always_goes_live\nstatus = fsm.add_nurv_monitor(nurv_always_goes_live)\nstatus["verdict"]   # unknown / true / false' },
-            { text: 'From a terminal: NURV_PATH=... nxd nurv diagram.nxd -o monitors/ generates and compiles them.' }
+            { text: 'From a terminal: NURV_PATH=... pflow nurv diagram.pflow -o monitors/ generates and compiles them.' }
         ]
     },
     {

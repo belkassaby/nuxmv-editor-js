@@ -6,7 +6,7 @@ marked "not verified" come from general knowledge and were not re-checked.*
 
 LLM agents are increasingly built as explicit control flows — graphs, state machines,
 workflows — around non-deterministic model calls. This document looks at the tools in the
-domains that such a system touches, from design to operation, and at where nuxmv-editor-js fits:
+domains that such a system touches, from design to operation, and at where ProvenFlow fits:
 what it has that the others do not, and what the others do that it does not.
 
 ## 1. Summary
@@ -19,7 +19,7 @@ The individual pieces all exist:
 - research prototypes that check agent graphs or constrain agents with temporal rules (Agentproof,
   TraceFix, AgentSpec, ProbGuard, Agent-C).
 
-No tool we found combines them on one artifact. nuxmv-editor-js takes a diagram and, from that
+No tool we found combines them on one artifact. ProvenFlow takes a diagram and, from that
 single source:
 1. verifies it with a temporal-logic model checker, and replays counterexamples on the drawing;
 2. generates an implementation that refuses the transitions the model does not have;
@@ -40,7 +40,7 @@ show.
 
 | | Visual design | Temporal-logic model checking | Counterexample on the diagram | Runtime enforces the model | Runtime monitors of the same properties | Live view of the running system | Recorded-trace conformance | Probabilistic analysis | Import from / export to agent frameworks |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| **nuxmv-editor-js** | ✓ | ✓ nuXmv (LTL, CTL, past LTL) | ✓ | ✓ Python | ✓ built-in past-time + NuRV | ✓ editor + Jupyter | ✓ JSONL / OpenTelemetry | ✓ built-in + PRISM export | ✓ LangGraph, CrewAI, Mermaid, XState in; XState, LangGraph, Burr, Temporal out |
+| **ProvenFlow** | ✓ | ✓ nuXmv (LTL, CTL, past LTL) | ✓ | ✓ Python | ✓ built-in past-time + NuRV | ✓ editor + Jupyter | ✓ JSONL / OpenTelemetry | ✓ built-in + PRISM export | ✓ LangGraph, CrewAI, Mermaid, XState in; XState, LangGraph, Burr, Temporal out |
 | transitions + transitions-gui | ◐ diagrams (graphviz / mermaid) | — | — | ✓ | — | ✓ browser (gui) | — | — | — |
 | python-statemachine | ◐ diagrams, Jupyter rendering | — | — | ✓ (guards, validators) | — | ◐ Jupyter | — | — | — |
 | pydantic-graph | ◐ mermaid | — | — | ✓ edges from type hints | — | — | — | — | — |
@@ -82,12 +82,12 @@ from general knowledge; the other rows come from the sources checked for this su
 - **XState v5 + Stately.** A visual statechart editor with design and simulate modes, with export
   to JSON, JavaScript/TypeScript and Mermaid. The **Stately Inspector** shows running actors live,
   mostly for XState and front-end code, though it also works with back-end code and other state
-  management. Statecharts support hierarchy and parallel regions, which nuxmv-editor-js does not.
+  management. Statecharts support hierarchy and parallel regions, which ProvenFlow does not.
   It has no temporal-logic verification.
 - **AWS Step Functions Workflow Studio.** Drag-and-drop design that generates Amazon States
   Language, with JSON/YAML export and an execution view.
 
-**nuxmv-editor-js compared.** Its editor is simpler than Stately: flat states, no hierarchy or
+**ProvenFlow compared.** Its editor is simpler than Stately: flat states, no hierarchy or
 parallel regions. What it adds is model checking of the drawing, with counterexamples replayed on
 it, and a generated runtime whose monitors re-check the verified properties. Its XState export
 and import mean a machine can move between the two.
@@ -114,25 +114,25 @@ and import mean a machine can move between the two.
 - **Visual agent builders**: n8n, Langflow, Dify, Flowise *(not verified)*. Low-code graphs of LLM
   steps, without formal verification.
 
-**nuxmv-editor-js compared.** These frameworks *run* agents. None of them states or checks
+**ProvenFlow compared.** These frameworks *run* agents. None of them states or checks
 temporal properties of the graph: that a human approves every release, that retries are bounded,
-that a state is reachable. nuxmv-editor-js does not replace them. It verifies the control flow and
+that a state is reachable. ProvenFlow does not replace them. It verifies the control flow and
 then exports it: to LangGraph (a node per state), Burr (an action per state), Temporal (decisions
 as activities, human steps as signals) or XState. In each export every move goes through the
 verified transition table. The importers read existing LangGraph (JSON, Mermaid, source), CrewAI
 Flow, Mermaid and XState graphs, so agents that are already built can be verified. In return,
-those frameworks provide what nuxmv-editor-js leaves to them: persistence, scale, retries, tool
+those frameworks provide what ProvenFlow leaves to them: persistence, scale, retries, tool
 integrations, deployment.
 
 ### 2.3 Model checkers and specification languages
 
 - **nuXmv / NuSMV** (FBK). Symbolic model checking of LTL, CTL and invariants over finite and
-  infinite-state models, with BDD, BMC and IC3 engines. This is the engine nuxmv-editor-js uses.
+  infinite-state models, with BDD, BMC and IC3 engines. This is the engine ProvenFlow uses.
 - **TLA+ / TLC and Apalache**, **SPIN / Promela**, **UPPAAL** (timed automata, with a graphical
   editor, simulator and statistical model checking) *(not verified)*. All mature. They are textual
   (UPPAAL excepted) and none generates agent code or runtime monitors.
 
-**nuxmv-editor-js compared.** It makes a model checker usable by people who design agents. They
+**ProvenFlow compared.** It makes a model checker usable by people who design agents. They
 draw or type the machine and write properties from templates (termination, human gates, step
 order, reachability). Counterexamples are replayed on the drawing instead of read as text.
 Expressiveness is below TLA+ or UPPAAL: no clocks, no processes, no unbounded data.
@@ -143,7 +143,7 @@ Expressiveness is below TLA+ or UPPAAL: no clocks, no processes, no unbounded da
   and Google ADK. It checks structure, and checks temporal policies written in a DSL compiled to
   DFAs, both statically (graph × DFA) and at run time over event traces. On 18 workflows built by
   the authors, 27% had structural defects and 55% violated a human-gate policy. The authors say
-  this is *not* a prevalence study. It is the closest work to nuxmv-editor-js's check-then-monitor
+  this is *not* a prevalence study. It is the closest work to ProvenFlow's check-then-monitor
   design; it has no editor, no counterexample replay and no LTL/CTL model checker.
 - **TraceFix** (arXiv 2605.07935, May 2026). An LLM writes a PlusCal coordination protocol and
   repairs it with TLC counterexamples. The verified process bodies are compiled into per-agent
@@ -163,7 +163,7 @@ Expressiveness is below TLA+ or UPPAAL: no clocks, no processes, no unbounded da
 - **StateFlow** (arXiv 2403.11322). Models LLM task-solving as state machines; reports higher
   success than ReAct at lower cost.
 
-**nuxmv-editor-js compared.** It is a tool rather than a research prototype. Its guardrails are
+**ProvenFlow compared.** It is a tool rather than a research prototype. Its guardrails are
 explicit, visual and verified before deployment, and the same formulas are enforced at run time.
 What it does *not* do, and the research above does, is constrain what the LLM *produces*: tokens
 (Agent-C) or tool arguments (AgentSpec). It does offer the legal next events for constrained
@@ -183,7 +183,7 @@ decoding: `allowed_events()` as a tool `enum`, and `Rejected.as_feedback()` for 
   They define agent and workflow spans (`invoke_agent`, `create_agent`, `invoke_workflow`) and tool
   spans (`execute_tool`).
 
-**nuxmv-editor-js compared.**
+**ProvenFlow compared.**
 - Its built-in monitors cover invariants and G(present/past) formulas, compiled with the classic
   incremental construction.
 - The NuRV integration adds full-LTL monitors under the model's assumptions. It generates the NuRV
@@ -191,7 +191,7 @@ decoding: `allowed_events()` as a tool `enum`, and `Rejected.as_feedback()` for 
   library path and an extra argument.
 - `enable_tracing()` emits spans with `fsm.*` attributes, and the conformance checker reads them
   back. The spans do not yet follow the GenAI conventions' names.
-- Guardrail frameworks such as NeMo or Invariant filter content; nuxmv-editor-js constrains the
+- Guardrail frameworks such as NeMo or Invariant filter content; ProvenFlow constrains the
   *process*. The two are complementary.
 
 ### 2.6 Probabilistic model checking
@@ -200,7 +200,7 @@ decoding: `allowed_events()` as a tool `enum`, and `Rejected.as_feedback()` for 
 explicit inputs; Python bindings) are the reference tools. ProbGuard and VeriPlan apply
 probabilistic models to agents.
 
-**nuxmv-editor-js compared.** The `prob` annotations turn a diagram into a Markov chain over
+**ProvenFlow compared.** The `prob` annotations turn a diagram into a Markov chain over
 configurations. The editor computes reachability probabilities (bounded and unbounded), expected
 steps and expected visits, and exports the chain to PRISM/Storm for everything else. Its values
 match PRISM 4.10.1 in the test suite. It has no MDP (nondeterminism *and* probability), no
@@ -214,7 +214,7 @@ recorded runs would be a natural next step.
 - **transitions**: example notebooks. Live views otherwise live outside notebooks:
   transitions-gui, the Stately Inspector, LangGraph Studio, the Burr UI, DevUI.
 
-**nuxmv-editor-js compared.** Generated machines display as SVG in any notebook, and as a live
+**ProvenFlow compared.** Generated machines display as SVG in any notebook, and as a live
 anywidget/Cytoscape.js widget that follows every transition. The editor itself can follow and
 drive a running process over a two-way link, where transitions-gui drives a *transitions* machine
 from its page.
@@ -240,7 +240,7 @@ from its page.
   runtime monitors, conformance checks and a live view gives evidence that the oversight exists and
   works.
 
-## 4. What nuxmv-editor-js brings, and what it lacks
+## 4. What ProvenFlow brings, and what it lacks
 
 **Brings, in one tool, from one diagram:**
 1. Visual and textual design (Langium grammar, Cytoscape.js), with layouts that minimise
@@ -280,9 +280,9 @@ from its page.
 | Run an agent in production (persistence, retries, scale) | LangGraph, Burr, Temporal, Microsoft Agent Framework |
 | Visual statecharts with hierarchy and parallel regions | XState + Stately |
 | Filter or shape LLM content | NeMo Guardrails, Invariant, Agent-C / AgentSpec (research) |
-| Prove properties of the agent's control flow, and keep them true in code and in operation | nuxmv-editor-js, then export to the runtime of your choice |
+| Prove properties of the agent's control flow, and keep them true in code and in operation | ProvenFlow, then export to the runtime of your choice |
 | Timed or concurrent protocols | UPPAAL, TLA+ / TLC, SPIN |
-| Rich probabilistic models (MDPs, CTMCs) | PRISM, Storm (nuxmv-editor-js exports to them) |
+| Rich probabilistic models (MDPs, CTMCs) | PRISM, Storm (ProvenFlow exports to them) |
 
 ## Sources
 

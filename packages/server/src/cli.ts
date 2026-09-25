@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { readFile, writeFile } from 'node:fs/promises';
 import { parseArgs } from 'node:util';
-import { analyse, checkConformance, exportPrism, exportToFramework, importGraph, serializeDiagram, type ProbabilisticQuery, FRAMEWORKS, generateNotebook, generatePython, generatePythonTests, generateSmv, matchResults, parseDiagram, parseTrace, type Framework } from '@nuxmv-editor/language';
+import { analyse, checkConformance, exportPrism, exportToFramework, importGraph, serializeDiagram, type ProbabilisticQuery, FRAMEWORKS, generateNotebook, generatePython, generatePythonTests, generateSmv, matchResults, parseDiagram, parseTrace, type Framework } from '@provenflow/language';
 import { configFromEnv, ENGINES, runNuxmv, type Engine } from './nuxmv-runner.js';
 import { nurvExecutable, runNurv } from './nurv-runner.js';
 import { spawnSync } from 'node:child_process';
@@ -9,26 +9,26 @@ import { mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 
 const USAGE = `Usage:
-  nxd generate <diagram.nxd> [-o model.smv]      write the nuXmv model
-  nxd check <diagram.nxd> [--engine bdd|bmc|ic3] [--bound N]
+  pflow generate <diagram.pflow> [-o model.smv]  write the nuXmv model
+  pflow check <diagram.pflow> [--engine bdd|bmc|ic3] [--bound N]
                                                  verify the specifications with nuXmv (NUXMV_PATH)
-  nxd python <diagram.nxd> [-o module.py]        write the Python implementation of the state machine
-  nxd notebook <diagram.nxd> [-o notebook.ipynb] [--verify]
+  pflow python <diagram.pflow> [-o module.py]    write the Python implementation of the state machine
+  pflow notebook <diagram.pflow> [-o notebook.ipynb] [--verify]
                                                  write a Jupyter notebook showcasing it; --verify runs
                                                  nuXmv first to include verdicts and counterexamples
-  nxd pytest <diagram.nxd> [-o test_module.py] [--verify]
+  pflow pytest <diagram.pflow> [-o test_module.py] [--verify]
                                                  write Hypothesis property-based tests for the Python module
-  nxd export <xstate|langgraph|burr|temporal> <diagram.nxd> [-o file]
+  pflow export <xstate|langgraph|burr|temporal> <diagram.pflow> [-o file]
                                                  export the verified machine to an agent/workflow framework
-  nxd import <graph> [-o diagram.nxd]            import a LangGraph (JSON, Mermaid, source), CrewAI Flow,
+  pflow import <graph> [-o diagram.pflow]        import a LangGraph (JSON, Mermaid, source), CrewAI Flow,
                                                  Mermaid or XState graph as a diagram
-  nxd prob <diagram.nxd> [--reach EXPR] [--within K] [--steps EXPR] [--visits EXPR --until EXPR]
+  pflow prob <diagram.pflow> [--reach EXPR] [--within K] [--steps EXPR] [--visits EXPR --until EXPR]
                                                  probabilistic analysis of the diagram as a Markov chain
-  nxd prism <diagram.nxd> [-o model.pm] [--reach EXPR ...]
+  pflow prism <diagram.pflow> [-o model.pm] [--reach EXPR ...]
                                                  export the Markov chain to PRISM / Storm (model + .pctl)
-  nxd nurv <diagram.nxd> [-o dir]               generate full-LTL Python monitors with NuRV (NURV_PATH)
+  pflow nurv <diagram.pflow> [-o dir]            generate full-LTL Python monitors with NuRV (NURV_PATH)
                                                  and compile them with cc when available
-  nxd conform <diagram.nxd> <run.jsonl|otel.json>
+  pflow conform <diagram.pflow> <run.jsonl|otel.json>
                                                  check a recorded run against the model (exit 4 if it deviates)`;
 
 async function main(): Promise<number> {
@@ -48,7 +48,7 @@ async function main(): Promise<number> {
         }
     });
     const [command, ...rest] = positionals;
-    // nxd export <framework> <diagram>: the diagram is the second argument.
+    // pflow export <framework> <diagram>: the diagram is the second argument.
     const framework = command === 'export' ? rest.shift() : undefined;
     const [file, second] = rest;
     if (values.help || !command || !file) {
@@ -59,9 +59,9 @@ async function main(): Promise<number> {
     if (command === 'import') {
         const result = importGraph(await readFile(file, 'utf8'));
         result.notes.forEach(n => console.error(`note: ${n}`));
-        const nxd = serializeDiagram(result.model);
-        if (values.output) await writeFile(values.output, nxd, 'utf8');
-        else process.stdout.write(nxd);
+        const text = serializeDiagram(result.model);
+        if (values.output) await writeFile(values.output, text, 'utf8');
+        else process.stdout.write(text);
         return 0;
     }
     const parsed = await parseDiagram(await readFile(file, 'utf8'));
@@ -120,7 +120,7 @@ async function main(): Promise<number> {
         const out = await exportToFramework(parsed.model, framework as Framework);
         const target = values.output ?? out.fileName;
         await writeFile(target, out.code, 'utf8');
-        console.log(`wrote ${target}${out.requires.length ? ` (needs ${out.requires.join(', ')}: nxd python ${file})` : ''}`);
+        console.log(`wrote ${target}${out.requires.length ? ` (needs ${out.requires.join(', ')}: pflow python ${file})` : ''}`);
         return 0;
     }
     if (command === 'prob' || command === 'prism') {
@@ -160,7 +160,7 @@ async function main(): Promise<number> {
         return 0;
     }
     if (command === 'conform') {
-        if (!second) throw new Error('Usage: nxd conform <diagram.nxd> <run.jsonl|otel.json>');
+        if (!second) throw new Error('Usage: pflow conform <diagram.pflow> <run.jsonl|otel.json>');
         const records = parseTrace(await readFile(second, 'utf8'));
         const report = await checkConformance(parsed.model, records);
         for (const issue of report.issues) console.log(`step ${issue.step}: ${issue.kind}: ${issue.message}`);

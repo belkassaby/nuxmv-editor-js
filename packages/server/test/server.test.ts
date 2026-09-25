@@ -2,7 +2,7 @@ import type { AddressInfo } from 'node:net';
 import type { Server } from 'node:http';
 import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { EXAMPLES, generatePython, generateSmv, matchResults, parseDiagram } from '@nuxmv-editor/language';
+import { EXAMPLES, generatePython, generateSmv, matchResults, parseDiagram } from '@provenflow/language';
 import { runNurv } from '../src/nurv-runner.js';
 import { spawn, spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync } from 'node:fs';
@@ -117,7 +117,7 @@ describe('REST API (fake nuXmv)', () => {
     it.skipIf(!python)('two-way live link: the editor drives a running Python machine', async () => {
         const { model } = await parseDiagram(EXAMPLES.find(e => e.id === 'agent-tool-approval')!.source);
         const py = await generatePython(model);
-        const dir = mkdtempSync(join(tmpdir(), 'nxd-live-'));
+        const dir = mkdtempSync(join(tmpdir(), 'pflow-live-'));
         writeFileSync(join(dir, `${py.moduleName}.py`), py.code);
         const proc = spawn(python!, ['-c', `
 import time, ${py.moduleName} as m
@@ -224,7 +224,7 @@ describe.skipIf(!nurv || !py || !cc)('NuRV monitors', () => {
         const { model } = await parseDiagram(source);
         const result = await runNurv(model, nurv!);
         expect(result.monitors.map(m => m.name)).toEqual(['closes', 'replies']);
-        const dir = mkdtempSync(join(tmpdir(), 'nxd-nurv-'));
+        const dir = mkdtempSync(join(tmpdir(), 'pflow-nurv-'));
         for (const [name, content] of Object.entries(result.files)) writeFileSync(join(dir, name), content);
         for (const cmd of result.build) {
             const [bin, ...args] = cmd.split(' ');

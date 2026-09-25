@@ -1,7 +1,7 @@
 <header class="topbar">
   <div class="brand">
     <span class="logo" aria-hidden="true">◉→◯</span>
-    <span class="title">nuXmv Diagram Editor</span>
+    <span class="title">ProvenFlow</span>
   </div>
   <nav class="menubar" aria-label="Main menu">
     <div class="menu">
@@ -9,9 +9,9 @@
       @if (openMenu() === 'file') {
         <div class="menu-list" role="menu">
           <button type="button" role="menuitem" (click)="newDiagram()">New diagram</button>
-          <button type="button" role="menuitem" (click)="open()">Open .nxd…</button>
+          <button type="button" role="menuitem" (click)="open()">Open .pflow…</button>
           <button type="button" role="menuitem" (click)="importAgentGraph()" title="LangGraph (JSON, Mermaid, Python source), CrewAI Flow, Mermaid or XState">Import agent graph…</button>
-          <button type="button" role="menuitem" (click)="save()">Save .nxd <kbd>⌘S</kbd></button>
+          <button type="button" role="menuitem" (click)="save()">Save .pflow <kbd>⌘S</kbd></button>
           <hr />
           <button type="button" role="menuitem" (click)="exportSmv()">Export nuXmv model (.smv)</button>
           <button type="button" role="menuitem" (click)="exportPng()">Export diagram (.png)</button>
@@ -91,7 +91,7 @@
   @if (showText()) {
     <section class="pane text-pane" aria-label="Text editor">
       <div class="pane-head">
-        <span>Diagram text <span class="muted small">(.nxd · Langium)</span></span>
+        <span>Diagram text <span class="muted small">(.pflow · Langium)</span></span>
         <span class="spacer"></span>
         <span class="counts">
           @if (store.errorCount()) { <span class="badge fail">{{ store.errorCount() }} error{{ store.errorCount() > 1 ? 's' : '' }}</span> }

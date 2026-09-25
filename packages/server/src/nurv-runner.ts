@@ -2,7 +2,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { nurvPlan, type DiagramModel } from '@nuxmv-editor/language';
+import { nurvPlan, type DiagramModel } from '@provenflow/language';
 
 export interface NurvResult {
     /** Generated sources: <module>.py (ctypes wrapper) and <module>.c/.h per property. */
@@ -29,7 +29,7 @@ export function nurvAvailable(executable = nurvExecutable()): boolean {
 export async function runNurv(model: DiagramModel, executable: string, timeoutMs = 120_000): Promise<NurvResult> {
     const plan = await nurvPlan(model);
     if (plan.monitors.length === 0) return { files: {}, monitors: [], log: 'No LTL property needs a NuRV monitor.', build: [] };
-    const dir = await mkdtemp(join(tmpdir(), 'nuxmv-editor-nurv-'));
+    const dir = await mkdtemp(join(tmpdir(), 'provenflow-nurv-'));
     try {
         await writeFile(join(dir, 'model.smv'), plan.smv);
         await writeFile(join(dir, 'synthesis.cmd'), plan.script);

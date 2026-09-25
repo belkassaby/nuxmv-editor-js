@@ -4,7 +4,7 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
     resolve: {
         alias: {
-            '@nuxmv-editor/language': fileURLToPath(new URL('../language/src/index.ts', import.meta.url))
+            '@provenflow/language': fileURLToPath(new URL('../language/src/index.ts', import.meta.url))
         }
     }
 });

@@ -5,10 +5,10 @@ import { lintGutter, setDiagnostics, type Diagnostic as CmDiagnostic } from '@co
 import { EditorState } from '@codemirror/state';
 import { EditorView, highlightActiveLine, keymap, lineNumbers } from '@codemirror/view';
 import { DiagramStore } from '../diagram-store';
-import { nxdHighlight, nxdLanguage } from './nxd-language';
+import { pflowHighlight, pflowLanguage } from './pflow-language';
 
 /**
- * CodeMirror editor for the `.nxd` text. Parsing, validation and the
+ * CodeMirror editor for the `.pflow` text. Parsing, validation and the
  * diagnostics shown here are provided by the Langium language services.
  */
 @Component({
@@ -37,8 +37,8 @@ export class TextEditor implements OnDestroy {
                         bracketMatching(),
                         indentOnInput(),
                         lintGutter(),
-                        nxdLanguage,
-                        nxdHighlight,
+                        pflowLanguage,
+                        pflowHighlight,
                         keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab]),
                         EditorView.lineWrapping,
                         EditorView.updateListener.of(update => {

@@ -1,5 +1,5 @@
 import { Component, computed, inject, signal } from '@angular/core';
-import { attributeDomain } from '@nuxmv-editor/language';
+import { attributeDomain } from '@provenflow/language';
 import { DiagramStore } from '../diagram-store';
 
 /** Properties of the selected state or transition. */

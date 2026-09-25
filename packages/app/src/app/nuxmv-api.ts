@@ -1,5 +1,5 @@
 import { Injectable, inject, signal } from '@angular/core';
-import { matchResults, type NuxmvOutput } from '@nuxmv-editor/language';
+import { matchResults, type NuxmvOutput } from '@provenflow/language';
 import { DiagramStore } from './diagram-store';
 
 export type Engine = 'bdd' | 'bmc' | 'ic3';

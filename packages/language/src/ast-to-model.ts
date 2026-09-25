@@ -2,7 +2,7 @@ import type { AttributeType as AstAttributeType, AttributeValue, Diagram, Expres
 import type { AttributeType, DiagramModel, StateDef, TransitionDef } from './model.js';
 import { diagramAttributes, diagramStates, diagramVariables } from './state-diagram-validator.js';
 
-/** Converts a parsed `.nxd` document into the plain {@link DiagramModel}. */
+/** Converts a parsed `.pflow` document into the plain {@link DiagramModel}. */
 export function astToModel(diagram: Diagram): DiagramModel {
     const model: DiagramModel = {
         name: diagram.name,
