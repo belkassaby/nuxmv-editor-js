@@ -383,6 +383,27 @@ class StateMachine:
         """Live diagram for Jupyter (needs anywidget); follows every transition."""
         return _make_widget(self, height)
 
+    def record_to(self, path):
+        """Append every step to a JSON Lines file, for trace conformance checking in the editor (Trace -> Check a recorded run) or with "nxd conform"."""
+        import json
+        import time
+
+        def write(fsm, record=None):
+            line = {
+                "step": len(fsm.history),
+                "event": record["event"] if record else None,
+                "source": record["source"] if record else None,
+                "state": fsm.state.value,
+                "values": {k: v for k, v in fsm.values.items() if k != "state"},
+                "time": time.time(),
+            }
+            with open(path, "a", encoding="utf-8") as out:
+                out.write(json.dumps(line) + "\n")
+
+        self.subscribe(write)
+        write(self, None)
+        return write
+
     def link_editor(self, url="http://127.0.0.1:3000", channel="default"):
         """Stream state changes to a running nuxmv-editor."""
         link = EditorLink(url, channel)

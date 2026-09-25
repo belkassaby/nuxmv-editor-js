@@ -1,6 +1,8 @@
 import { KeyValuePipe } from '@angular/common';
 import { Component, computed, inject, OnDestroy, signal } from '@angular/core';
+import { checkConformance, parseTrace } from '@nuxmv-editor/language';
 import { DiagramStore } from '../diagram-store';
+import { pickFile } from '../file-io';
 import { LiveLink } from '../live-link';
 import { CodeExport } from '../code-export';
 
@@ -59,6 +61,27 @@ export class TracePanel implements OnDestroy {
     stop(): void {
         clearInterval(this.timer);
         this.playing.set(false);
+    }
+
+    readonly importError = signal<string | null>(null);
+
+    /** Trace conformance: check a recorded run (JSONL or OpenTelemetry JSON) against the model. */
+    async importRun(): Promise<void> {
+        const file = await pickFile('.jsonl,.json,.ndjson,application/json');
+        if (!file) return;
+        try {
+            const records = parseTrace(file.text);
+            if (records.length === 0) throw new Error('the file contains no steps');
+            const report = await checkConformance(this.store.model(), records);
+            this.importError.set(null);
+            this.store.showRecorded(report, file.name);
+        } catch (error) {
+            this.importError.set(`Could not check ${file.name}: ${(error as Error).message}`);
+        }
+    }
+
+    issuesAt(step: number): string[] {
+        return (this.store.trace()?.issues ?? []).filter(i => i.step === step).map(i => i.message);
     }
 
     fmt(value: unknown): string {

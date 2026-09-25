@@ -13,6 +13,8 @@ import {
     Semantics,
     type AttributeDef,
     type Configuration,
+    type ConformanceIssue,
+    type ConformanceReport,
     type Diagnostic,
     type DiagramModel,
     type Position,
@@ -74,7 +76,8 @@ export class DiagramStore {
     readonly fileName = signal('diagram.nxd');
     readonly dirty = signal(false);
     readonly verification = signal<Verification | null>(null);
-    readonly trace = signal<{ specIndex: number; trace: Trace } | null>(null);
+    /** The trace being replayed: a nuXmv counterexample (specIndex >= 0) or a recorded run (-1). */
+    readonly trace = signal<{ specIndex: number; trace: Trace; issues?: ConformanceIssue[] } | null>(null);
     readonly traceStep = signal(0);
     /** Simulated run: configurations (state + data variables), oldest first. */
     readonly simulation = signal<Configuration[] | null>(null);
@@ -347,6 +350,25 @@ export class DiagramStore {
         this.live.set(null);
         this.trace.set({ specIndex, trace: result.trace });
         this.traceStep.set(0);
+    }
+
+    /** Replays a recorded run checked against the model (trace conformance). */
+    showRecorded(report: ConformanceReport, name: string): void {
+        this.simulation.set(null);
+        this.live.set(null);
+        const steps = report.steps.map((s, i) => {
+            const values: Record<string, string> = {};
+            for (const [k, v] of Object.entries(s.values)) values[k] = v === true ? 'TRUE' : v === false ? 'FALSE' : v === undefined ? '?' : String(v);
+            const previous = i > 0 ? report.steps[i - 1].values : {};
+            return { id: String(i), values, changed: Object.keys(s.values).filter(k => s.values[k] !== previous[k]) };
+        });
+        const n = report.issues.length;
+        this.trace.set({
+            specIndex: -1,
+            trace: { description: `Recorded run ${name}: ${n === 0 ? 'conforms to the model' : `${n} issue(s)`}`, type: 'Recorded', steps },
+            issues: report.issues
+        });
+        this.traceStep.set(report.issues[0]?.step ?? 0);
     }
 
     stepTrace(delta: number): void {

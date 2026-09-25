@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { readFile, writeFile } from 'node:fs/promises';
 import { parseArgs } from 'node:util';
-import { generateNotebook, generatePython, generateSmv, matchResults, parseDiagram } from '@nuxmv-editor/language';
+import { checkConformance, generateNotebook, generatePython, generateSmv, matchResults, parseDiagram, parseTrace } from '@nuxmv-editor/language';
 import { configFromEnv, ENGINES, runNuxmv, type Engine } from './nuxmv-runner.js';
 
 const USAGE = `Usage:
@@ -11,7 +11,9 @@ const USAGE = `Usage:
   nxd python <diagram.nxd> [-o module.py]        write the Python implementation of the state machine
   nxd notebook <diagram.nxd> [-o notebook.ipynb] [--verify]
                                                  write a Jupyter notebook showcasing it; --verify runs
-                                                 nuXmv first to include verdicts and counterexamples`;
+                                                 nuXmv first to include verdicts and counterexamples
+  nxd conform <diagram.nxd> <run.jsonl|otel.json>
+                                                 check a recorded run against the model (exit 4 if it deviates)`;
 
 async function main(): Promise<number> {
     const { positionals, values } = parseArgs({
@@ -24,7 +26,7 @@ async function main(): Promise<number> {
             verify: { type: 'boolean', default: false }
         }
     });
-    const [command, file] = positionals;
+    const [command, file, second] = positionals;
     if (values.help || !command || !file) {
         console.log(USAGE);
         return values.help ? 0 : 2;
@@ -67,6 +69,14 @@ async function main(): Promise<number> {
         await writeFile(out, notebook, 'utf8');
         console.log(`wrote ${out}`);
         return 0;
+    }
+    if (command === 'conform') {
+        if (!second) throw new Error('Usage: nxd conform <diagram.nxd> <run.jsonl|otel.json>');
+        const records = parseTrace(await readFile(second, 'utf8'));
+        const report = await checkConformance(parsed.model, records);
+        for (const issue of report.issues) console.log(`step ${issue.step}: ${issue.kind}: ${issue.message}`);
+        console.log(`${records.length} step(s), ${report.issues.length} issue(s); monitored: ${report.monitored.join(', ') || 'none'}`);
+        return report.conforms ? 0 : 4;
     }
     if (command === 'check') {
         const engine = values.engine as Engine;

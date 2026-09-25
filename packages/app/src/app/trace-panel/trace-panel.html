@@ -46,6 +46,17 @@ fsm.send(...)   # every transition moves the diagram here</pre>
     <span class="muted small">step {{ store.traceStep() + 1 }} / {{ t.trace.steps.length }}</span>
     <button type="button" (click)="close()">Close</button>
   </div>
+  @if (t.issues) {
+    @if (t.issues.length === 0) {
+      <p class="ok-text pad-x">✓ Every step follows an enabled transition of the model and the monitored properties hold.</p>
+    } @else {
+      <ul class="issues">
+        @for (issue of t.issues; track $index) {
+          <li><button type="button" class="link" (click)="store.traceStep.set(issue.step)">step {{ issue.step }}</button> <span class="badge fail">{{ issue.kind }}</span> {{ issue.message }}</li>
+        }
+      </ul>
+    }
+  }
   @if (t.trace.loopStart !== undefined) {
     <p class="muted small pad">Lasso-shaped counterexample: from step {{ t.trace.loopStart + 1 }} the last steps repeat forever (dashed edge on the diagram).</p>
   }
@@ -67,7 +78,7 @@ fsm.send(...)   # every transition moves the diagram here</pre>
           <tr>
             <th class="mono">{{ name }}</th>
             @for (step of t.trace.steps; track $index; let i = $index) {
-              <td class="mono clickable" [class.changed]="step.changed.includes(name) && i > 0" [class.current-col]="i === store.traceStep()" (click)="store.traceStep.set(i)">{{ step.values[name] }}</td>
+              <td class="mono clickable" [class.changed]="step.changed.includes(name) && i > 0" [class.current-col]="i === store.traceStep()" [class.issue-col]="issuesAt(i).length > 0" [title]="issuesAt(i).join('\n')" (click)="store.traceStep.set(i)">{{ step.values[name] }}</td>
             }
           </tr>
         }
@@ -131,6 +142,10 @@ fsm.send(...)   # every transition moves the diagram here</pre>
       <li>Or explore the model by hand:</li>
     </ul>
     <button type="button" class="primary" (click)="store.startSimulation()" [disabled]="store.model().states.length === 0">Start simulation</button>
+    <h4>Check a recorded run</h4>
+    <p class="muted small">Trace conformance: load a run of the real system (JSON Lines from <code>fsm.record_to(path)</code> or any logger with a <code>state</code> field, or OpenTelemetry JSON) and check every step against the verified model and its monitored properties.</p>
+    <button type="button" (click)="importRun()">Check a recorded run…</button>
+    @if (importError()) { <p class="error-text">{{ importError() }}</p> }
     <h4>Live from Python</h4>
     <p class="muted small">Follow a running implementation of this diagram (Python tab → download the module or notebook, then <code>fsm.link_editor(channel=…)</code>).</p>
     <div class="inline">

@@ -238,7 +238,36 @@ function assignEvents(transitions: DiagramModel['transitions']): Array<Omit<Pyth
     const seen = new Map<string, number>();
     for (const t of result) seen.set(`${t.source}|${t.event}`, (seen.get(`${t.source}|${t.event}`) ?? 0) + 1);
     for (const t of result) if ((seen.get(`${t.source}|${t.event}`) ?? 0) > 1) t.event = `${t.event}__TO_${upperSnake(t.target)}`;
+    // Still equal (same source, event and target, e.g. different guards): number them.
+    const count = new Map<string, number>();
+    for (const t of result) {
+        const k = `${t.source}|${t.event}`;
+        const n = (count.get(k) ?? 0) + 1;
+        count.set(k, n);
+        if (n > 1) t.event = `${t.event}__${n}`;
+    }
     return result;
+}
+
+/**
+ * Event name of every transition of the model, as used by the generated code
+ * and expected in recorded traces; undefined for the stutter self-loop of a
+ * final state, which is not an event of the running system.
+ */
+export function transitionEvents(model: DiagramModel): Array<string | undefined> {
+    const exits = new Map<string, number>();
+    for (const t of model.transitions) if (t.source !== t.target) exits.set(t.source, (exits.get(t.source) ?? 0) + 1);
+    const isStutter = (t: DiagramModel['transitions'][number]) => t.source === t.target && !t.label && !t.guard && !t.updates?.length && !exits.get(t.source);
+    const liveIndex = model.transitions.map((_, i) => i).filter(i => !isStutter(model.transitions[i]));
+    const events = assignEvents(liveIndex.map(i => model.transitions[i]));
+    const result: Array<string | undefined> = model.transitions.map(() => undefined);
+    liveIndex.forEach((i, k) => (result[i] = events[k].event));
+    return result;
+}
+
+/** Normalises a label or event name the way the generated code does (TESTS_FAILED). */
+export function eventName(text: string): string {
+    return upperSnake(text);
 }
 
 // ---------------------------------------------------------------------------
