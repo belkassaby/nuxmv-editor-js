@@ -51,6 +51,14 @@ export function astToModel(diagram: Diagram): DiagramModel {
                     expression: expressionText(element.expression)
                 });
                 break;
+            case 'AttributeBlock':
+            case 'VariableBlock':
+            case 'State':
+                break; // converted above, with the declarations they may reference
+            default: {
+                const unknown: never = element;
+                throw new Error(`Unknown diagram element ${(unknown as { $type: string }).$type}`);
+            }
         }
     }
     return model;

@@ -25,3 +25,5 @@ packages/language/test/.generated/
 /*_live_demo.py
 /test_*_fsm.py
 .idea/
+# Output and LLM cache of pflow extract
+.provenflow/

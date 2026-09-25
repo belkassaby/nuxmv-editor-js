@@ -167,6 +167,24 @@ export const WALKTHROUGHS: Walkthrough[] = [
         ]
     },
     {
+        id: 'code',
+        keywords: 'extract code base source typescript python angular bugs patterns singleton observer builder architecture layers paradigm functional object oriented llm ai generated sarif ci',
+        title: 'Model-check a code base (pflow extract)',
+        goal: 'Check existing or AI-generated code: its state machines, resource lifecycles, design patterns and layers become models nuXmv verifies, and each problem comes with the code path that shows it and a fix.',
+        steps: [
+            { text: 'From a terminal, run pflow extract on the project (TypeScript/JavaScript, Angular templates and Python). With NUXMV_PATH set the models are checked by nuXmv; without it, by an explicit-state checker for the standard properties.', code: 'NUXMV_PATH=/path/to/nuXmv npx pflow extract path/to/project' },
+            { text: 'State machines: every field typed as a finite set of values (a string-literal union, an enum, a Signal of one, a Python Enum or Literal) becomes a model. Assignments are the transitions; if/switch/match conditions and early returns tell from which states they can happen; writes of a parameter take the values the callers pass.' },
+            { text: 'Checked properties: every declared value can be reached (a value that is only compared against is dead code), the machine can always get back to its initial or final states, no state is stuck, every switch handles every value, and no write after an await relies on a check made before it.' },
+            { text: 'Resource lifecycles: timers, listeners on window/document, EventSources, observers, processes, temporary directories, files and locks become idle / held / leaked / disposed models over the public methods of their class. nuXmv proves "never leaked" or shows how to leak (acquire twice, dispose without releasing).' },
+            { text: 'Design patterns: singletons, observers, builders, strategies, adapters/decorators, the State and Command patterns, factories and facades are recognised. Each is checked by its contract: a singleton is never constructed twice, an observer can unsubscribe, a builder never builds unconfigured, every state class is reachable, every strategy implements its interface.' },
+            { text: 'Read .provenflow/extract/report.md: every finding has its location, what goes wrong (with the counterexample as code events), and a fix. report.sarif shows the same findings in GitHub code scanning; scenarios/ has a test skeleton per counterexample to confirm it on the real code.' },
+            { text: 'Open a model (File → Open .pflow… → .provenflow/extract/models/…) to see the diagram, check it and replay counterexamples here. Its comments list the code behind every transition.' },
+            { text: 'Declare what the code promises in provenflow.config.json: layers and what each may import (checked transitively by nuXmv), the style of each layer (functional or object-oriented), the patterns you expect, final states and extra properties of machines. Record accepted exceptions with a reason.', code: '{\n  "layers": [\n    { "name": "core", "paths": ["src/core/**"], "mayImport": [], "style": "functional" },\n    { "name": "ui", "paths": ["src/ui/**"], "mayImport": ["core"], "style": "object-oriented" }\n  ],\n  "patterns": [{ "subject": "Session", "pattern": "singleton" }],\n  "machines": { "Order.status": { "specs": ["AG (state = \'cancelled\' -> AG state != \'shipped\')"] } },\n  "ignore": [{ "rule": "fp-class", "subject": "Parser", "reason": "..." }]\n}' },
+            { text: 'Optional LLM (API key or local model): it resolves writes of computed values, suggests requirements and proposes patches. Nothing is taken on trust: a resolved write must cite a write the parser found, a requirement must parse and is decided by nuXmv, and a patch is marked verified only if re-running every check on the patched code removes the finding without adding new ones. Answers are cached.', code: 'ANTHROPIC_API_KEY=... pflow extract . --llm anthropic:claude-sonnet-5 --llm-fixes 5\npflow extract . --llm ollama:qwen2.5-coder' },
+            { text: 'In CI, --fail-on warning (or error) makes the build fail on new findings (exit code 5). ProvenFlow checks its own code this way.' }
+        ]
+    },
+    {
         id: 'nurv',
         keywords: 'ltl monitor runtime verification fbk',
         title: 'Full-LTL runtime monitors with NuRV',

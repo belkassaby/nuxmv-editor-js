@@ -2,7 +2,8 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { parseArgs } from 'node:util';
 import { analyse, checkConformance, exportPrism, exportToFramework, importGraph, serializeDiagram, type ProbabilisticQuery, FRAMEWORKS, generateNotebook, generatePython, generatePythonTests, generateSmv, matchResults, parseDiagram, parseTrace, type Framework } from '@provenflow/language';
-import { configFromEnv, ENGINES, runNuxmv, type Engine } from './nuxmv-runner.js';
+import { extractProject, formatFindings, providerFromSpec, summary, writeOutputs } from '@provenflow/extract';
+import { configFromEnv, ENGINES, nuxmvInfo, runNuxmv, type Engine } from './nuxmv-runner.js';
 import { nurvExecutable, runNurv } from './nurv-runner.js';
 import { spawnSync } from 'node:child_process';
 import { mkdir } from 'node:fs/promises';
@@ -29,7 +30,12 @@ const USAGE = `Usage:
   pflow nurv <diagram.pflow> [-o dir]            generate full-LTL Python monitors with NuRV (NURV_PATH)
                                                  and compile them with cc when available
   pflow conform <diagram.pflow> <run.jsonl|otel.json>
-                                                 check a recorded run against the model (exit 4 if it deviates)`;
+                                                 check a recorded run against the model (exit 4 if it deviates)
+  pflow extract <project-dir> [-o dir] [--config file] [--fail-on error|warning|none]
+                [--llm anthropic:<model>|openai:<model>|ollama:<model>] [--llm-fixes N]
+                                                 extract verified models of a code base (state machines,
+                                                 resource lifecycles, design patterns, architecture) and
+                                                 report bugs with fixes (exit 5 on findings at --fail-on)`;
 
 async function main(): Promise<number> {
     const { positionals, values } = parseArgs({
@@ -44,7 +50,12 @@ async function main(): Promise<number> {
             within: { type: 'string' },
             steps: { type: 'string', multiple: true },
             visits: { type: 'string' },
-            until: { type: 'string' }
+            until: { type: 'string' },
+            config: { type: 'string' },
+            'fail-on': { type: 'string', default: 'error' },
+            llm: { type: 'string' },
+            'llm-fixes': { type: 'string', default: '0' },
+            quiet: { type: 'boolean', short: 'q', default: false }
         }
     });
     const [command, ...rest] = positionals;
@@ -54,6 +65,31 @@ async function main(): Promise<number> {
     if (values.help || !command || !file) {
         console.log(USAGE);
         return values.help ? 0 : 2;
+    }
+
+    if (command === 'extract') {
+        const nuxmv = configFromEnv();
+        const available = (await nuxmvInfo(nuxmv)).available;
+        const engine = values.engine as Engine;
+        const checker = available ? (smv: string) => runNuxmv(smv, { engine, bound: Number(values.bound) }, nuxmv) : undefined;
+        const result = await extractProject(file, {
+            configFile: values.config,
+            checker,
+            llm: values.llm ? providerFromSpec(values.llm) : undefined,
+            llmFixes: Number(values['llm-fixes'])
+        });
+        const out = values.output ?? join(file, '.provenflow', 'extract');
+        const written = writeOutputs(result, out);
+        const counts = summary(result);
+        if (!values.quiet) console.log(formatFindings(result, 'warning'));
+        result.notes.forEach(n => console.error(`note: ${n}`));
+        console.log(
+            `${result.files} files, ${result.models.length} models, ${result.verdicts.length} properties (${available ? 'nuXmv' : 'explicit-state; set NUXMV_PATH for nuXmv'}): ` +
+                `${counts.error} error(s), ${counts.warning} warning(s), ${counts.info} note(s). Report: ${written.report}`
+        );
+        const failOn = values['fail-on'];
+        const failing = failOn === 'none' ? 0 : failOn === 'warning' ? counts.error + counts.warning : counts.error;
+        return failing > 0 ? 5 : 0;
     }
 
     if (command === 'import') {

@@ -1,0 +1,123 @@
+{
+  "exclude": [
+    "**/test/fixtures/**",
+    "examples/**"
+  ],
+  "layers": [
+    {
+      "name": "language",
+      "paths": [
+        "packages/language/src/**"
+      ],
+      "mayImport": [],
+      "style": "functional"
+    },
+    {
+      "name": "extract",
+      "paths": [
+        "packages/extract/src/**"
+      ],
+      "mayImport": [
+        "language"
+      ],
+      "style": "functional"
+    },
+    {
+      "name": "server",
+      "paths": [
+        "packages/server/src/**"
+      ],
+      "mayImport": [
+        "language",
+        "extract"
+      ],
+      "style": "functional"
+    },
+    {
+      "name": "app",
+      "paths": [
+        "packages/app/src/**"
+      ],
+      "mayImport": [
+        "language"
+      ],
+      "style": "object-oriented"
+    }
+  ],
+  "packageEntries": true,
+  "patterns": [
+    {
+      "subject": "DiagramStore",
+      "pattern": "singleton"
+    },
+    {
+      "subject": "LiveLink",
+      "pattern": "singleton"
+    },
+    {
+      "subject": "NuxmvApi",
+      "pattern": "singleton"
+    },
+    {
+      "subject": "packages/language",
+      "pattern": "facade"
+    },
+    {
+      "subject": "packages/extract",
+      "pattern": "facade"
+    }
+  ],
+  "machines": {
+    "App.tab": {
+      "terminal": [
+        "model",
+        "attributes",
+        "properties",
+        "trace",
+        "python",
+        "console"
+      ]
+    },
+    "HelpDialog.section": {
+      "terminal": [
+        "guide",
+        "walkthroughs",
+        "symbols",
+        "glossary",
+        "references"
+      ]
+    }
+  },
+  "ignore": [
+    {
+      "rule": "fp-mutable-global",
+      "file": "packages/language/src/parse.ts",
+      "reason": "Langium services are created once, on first use (memoised), and the counter only keeps the URIs of in-memory documents unique while several parses are in flight."
+    },
+    {
+      "rule": "fp-writes-outer-state",
+      "file": "packages/language/src/parse.ts",
+      "reason": "Same memoised services and document counter as above."
+    },
+    {
+      "rule": "fp-class",
+      "subject": "PastTimeMonitor",
+      "reason": "A runtime monitor is a state machine by nature: it keeps the previous values of the past-time subformulas."
+    },
+    {
+      "rule": "fp-class",
+      "file": "packages/extract/src/**",
+      "reason": "Compiler-API visitors keep the context of one traversal; they are never shared."
+    },
+    {
+      "rule": "oop-mutates-foreign-object",
+      "subject": "token",
+      "reason": "CodeMirror's StreamParser contract: token() advances the stream and updates the parser state it is given."
+    }
+  ],
+  "limits": {
+    "classMethods": 30,
+    "classLines": 600,
+    "functionLines": 80
+  }
+}

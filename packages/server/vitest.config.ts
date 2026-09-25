@@ -4,7 +4,8 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
     resolve: {
         alias: {
-            '@provenflow/language': fileURLToPath(new URL('../language/src/index.ts', import.meta.url))
+            '@provenflow/language': fileURLToPath(new URL('../language/src/index.ts', import.meta.url)),
+            '@provenflow/extract': fileURLToPath(new URL('../extract/src/index.ts', import.meta.url))
         }
     }
 });

@@ -219,6 +219,76 @@ anywidget/Cytoscape.js widget that follows every transition. The editor itself c
 drive a running process over a two-way link, where transitions-gui drives a *transitions* machine
 from its page.
 
+### 2.8 Checking a code base: static analysis, software model checking, specification mining, LLM review
+
+This domain matters for `pflow extract`, which checks existing or AI-generated code rather than a
+drawn design.
+
+- **Static analysers.**
+  - Meta **Infer** covers Java, C/C++/Objective-C, Erlang, Hack and some Python. Its Pulse analysis
+    reports resource leaks and builders that are never finished. Topl is an experimental typestate
+    checker, where the user writes the property as an automaton.
+  - **CodeQL** turns code into a database and runs QL queries on it (security and variant analysis).
+  - **Semgrep** matches code patterns, with an AI layer that triages findings and writes Autofix
+    remediations.
+  - **SonarQube** has Bug, Vulnerability and Code-Smell rules, the Cognitive Complexity metric, and
+    LLM fix suggestions (AI CodeFix).
+  - None of these checks temporal properties, and none extracts models.
+- **Architecture rules.**
+  - **ArchUnit** (Java) and **ArchUnitTS** check layers, cycles and naming as unit tests.
+  - **dependency-cruiser** checks JS/TS dependency rules, and **Madge** finds circular
+    dependencies.
+  - All of them work at the level of imports; none looks at behaviour or design patterns.
+- **Software model checkers.**
+  - **CBMC**, **ESBMC**, **Kani** (Rust), **CPAchecker**, **JBMC** and **Java PathFinder** check
+    assertions, memory safety, overflows, panics, deadlocks and exceptions of C/C++/Rust/Java
+    programs. ESBMC also covers Python, Kotlin and Solidity, and has work on LLM-generated
+    invariants.
+  - FBK's **Kratos2** (from the group behind nuXmv) verifies reachability and liveness of
+    imperative programs, written in its K2 language or through a C front end. It produces
+    counterexamples.
+  - They check the code itself, at the level of statements. They do not give a model of an
+    application's lifecycles or patterns that one can look at.
+- **Specification mining and automata learning.**
+  - **Daikon** reports likely invariants from observed runs.
+  - **Synoptic** and **CSight** infer finite-state models from logs.
+  - **LearnLib** and **AALpy** learn automata by querying a running system.
+  - They infer models from runs and do not check the source.
+- **LLMs and verification (research).**
+  - **SpecGen** and **AutoSpec** generate specifications with an LLM and keep those a verifier
+    accepts.
+  - **Lemur** combines LLMs with sound automated reasoners.
+  - **Clover** checks code, docstrings and Dafny annotations against each other.
+  - **PyVeritas** has an LLM transpile Python to C for CBMC.
+  - **IC3-Evolve** admits LLM patches only after proof validation.
+- **LLM code review.**
+  - **GitHub Copilot code review** uses tuned models and prompts, with no formal verification.
+    Its documentation warns that it may miss issues.
+  - **CodeRabbit** combines LLM review with linters and SAST tools.
+
+**ProvenFlow compared.** `pflow extract` reads TypeScript (with the type checker), Angular
+templates and Python. From them it builds four kinds of model:
+- state machines of fields with finite types;
+- typestate models of resource lifecycles;
+- behavioural contracts of design patterns;
+- the layer graph.
+
+It checks them all with nuXmv, maps counterexamples back to code events, checks the declared
+paradigm of each layer, and outputs SARIF. Its LLM step follows the same principle as SpecGen,
+AutoSpec and IC3-Evolve, applied to application code: proposals are kept only after deterministic
+re-verification (a cited write exists, the property parses and nuXmv decides it, a patch passes a
+full re-run). None of the tools above, as far as their documentation shows, covers this whole
+chain.
+
+It is shallower than each of them in its own area:
+- it does no dataflow or security analysis (CodeQL, Semgrep);
+- it does not check memory safety or arithmetic (CBMC, Kani, ESBMC);
+- it has no interprocedural heap analysis (Infer);
+- its pattern recognition is heuristic.
+
+Its models are abstractions, so a counterexample should be confirmed on the code: the scenarios
+it generates are for that.
+
 ## 3. Why it matters for LLM agents
 
 - **Agents fail in the ways model checking finds.** The MAST taxonomy (arXiv 2503.13657; 1,600+
@@ -259,6 +329,10 @@ from its page.
    XState.
 9. Tests that check the pieces agree with each other in both directions: nuXmv, the TypeScript
    semantics, the generated Python, NuRV and PRISM.
+10. From code to model (`pflow extract`): it extracts and verifies the state machines, resource
+    lifecycles, design-pattern contracts and layers of a TypeScript/Angular/Python code base. It
+    maps counterexamples to code, checks the declared paradigm of each layer, emits SARIF for CI,
+    and accepts LLM-proposed fixes only after re-verification (section 2.8).
 
 **Lacks:**
 - *Structure*: no hierarchical or parallel states (Stately has statecharts), no multiple modules or
@@ -272,6 +346,10 @@ from its page.
 - *Operations*: no persistence, scheduling or distribution (these are delegated to Temporal,
   LangGraph and Burr); NuRV is licensed separately; importing Python source is best effort.
 - *Standards*: the tracing does not yet use the OpenTelemetry GenAI span names.
+- *Code models*: TypeScript/JavaScript and Python only. The extraction is an abstraction:
+  conditions on other variables and aliasing are not tracked, and patterns are recognised by
+  shape. There is no dataflow, security or memory-safety analysis (use CodeQL, Semgrep, Infer or
+  CBMC alongside).
 
 ## 5. When to use what
 
@@ -287,6 +365,26 @@ from its page.
 ## Sources
 
 All checked on 25 September 2026 unless marked otherwise.
+
+- Code analysis (section 2.8):
+  - Infer: https://fbinfer.com/docs/checker-topl , https://fbinfer.com/docs/all-issue-types
+  - CodeQL: https://codeql.github.com/docs/codeql-overview/about-codeql/
+  - Semgrep: https://docs.semgrep.dev/semgrep-assistant/overview
+  - SonarQube: https://www.sonarsource.com/resources/cognitive-complexity/ ; the AI CodeFix
+    rules page was not opened
+  - ArchUnit: https://www.archunit.org/ ; ArchUnitTS: https://github.com/LukasNiessen/ArchUnitTS
+  - dependency-cruiser: https://github.com/sverweij/dependency-cruiser ; Madge: https://github.com/pahen/madge
+  - CBMC: https://www.cprover.org/cbmc/ ; JBMC: https://www.cprover.org/jbmc/
+  - ESBMC: https://github.com/esbmc/esbmc ; Kani: https://github.com/model-checking/kani
+  - CPAchecker: https://github.com/sosy-lab/cpachecker ; Java PathFinder: https://github.com/javapathfinder/jpf-core
+  - Kratos2: https://kratos.fbk.eu/
+  - Daikon: https://plse.cs.washington.edu/daikon/ ; Synoptic/CSight: https://github.com/ModelInference/synoptic
+  - LearnLib: https://learnlib.de/ ; AALpy: https://github.com/DES-Lab/AALpy
+  - SpecGen: https://arxiv.org/abs/2401.08807 ; AutoSpec: https://arxiv.org/abs/2404.00762
+  - Lemur: https://arxiv.org/abs/2310.04870 ; Clover: https://arxiv.org/abs/2310.17807
+  - PyVeritas: https://arxiv.org/abs/2508.08171 ; IC3-Evolve: https://arxiv.org/abs/2604.03232
+  - GitHub Copilot code review: https://docs.github.com/copilot/concepts/agents/code-review
+  - CodeRabbit: https://docs.coderabbit.ai/tools/
 
 - transitions — https://github.com/pytransitions/transitions ; transitions-gui — https://github.com/pytransitions/transitions-gui
 - python-statemachine — https://python-statemachine.readthedocs.io/en/latest/diagram.html , /guards.html

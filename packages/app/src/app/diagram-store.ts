@@ -21,6 +21,7 @@ import {
     type SpecResult,
     type Trace
 } from '@provenflow/language';
+import { candidates, initialConfigurations, stepTo } from './simulation';
 
 export type Selection = { kind: 'state'; name: string } | { kind: 'transition'; index: number } | null;
 
@@ -110,17 +111,7 @@ export class DiagramStore {
             return { path: live, current: live.length - 1, candidates: current ? successors(this.model(), current) : [] };
         }
         const sim = this.simulation();
-        if (sim) {
-            const last = sim[sim.length - 1];
-            const sem = this.semantics();
-            // Same semantics as the generated model: guards, updates, and stutter when nothing is enabled.
-            const next = !last
-                ? this.initialStates()
-                : sem
-                  ? [...new Set(sem.successors(last).map(s => s.config.state))]
-                  : successors(this.model(), last.state);
-            return { path: sim.map(c => c.state), current: sim.length - 1, candidates: next };
-        }
+        if (sim) return { path: sim.map(c => c.state), current: sim.length - 1, candidates: candidates(this.model(), this.semantics(), sim) };
         const t = this.trace();
         if (!t) return null;
         return {
@@ -399,42 +390,21 @@ export class DiagramStore {
 
     // ------------------------------------------------------------ simulation
 
-    initialStates(): string[] {
-        const states = this.model().states;
-        const initial = states.filter(s => s.initial).map(s => s.name);
-        return initial.length > 0 ? initial : states.slice(0, 1).map(s => s.name);
-    }
-
     startSimulation(): void {
         this.trace.set(null);
         this.live.set(null);
-        const initial = this.initialConfigurations();
+        const initial = initialConfigurations(this.model(), this.semantics());
         this.simulation.set(initial.length === 1 ? [initial[0]] : []);
     }
 
     simulateTo(state: string): void {
         const path = this.simulation();
-        if (!path) return;
-        const last = path[path.length - 1];
-        if (!last) {
-            const start = this.initialConfigurations().find(c => c.state === state);
-            if (start) this.simulation.set([start]);
-            return;
-        }
-        const sem = this.semantics();
-        const step = sem ? sem.successors(last).find(s => s.config.state === state)?.config : successors(this.model(), last.state).includes(state) ? { state, variables: { ...last.variables } } : undefined;
-        if (step) this.simulation.set([...path, step]);
-    }
-
-    private initialConfigurations(): Configuration[] {
-        const sem = this.semantics();
-        return sem ? sem.initialConfigurations() : this.initialStates().map(state => ({ state, variables: {} }));
+        if (path) this.simulation.set(stepTo(this.model(), this.semantics(), path, state));
     }
 
     simulateRandom(): void {
-        const candidates = this.highlight()?.candidates ?? [];
-        if (candidates.length === 0) return;
-        this.simulateTo(candidates[Math.floor(Math.random() * candidates.length)]);
+        const next = this.highlight()?.candidates ?? [];
+        if (next.length > 0) this.simulateTo(next[Math.floor(Math.random() * next.length)]);
     }
 
     simulateBack(): void {

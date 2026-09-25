@@ -1,0 +1,373 @@
+# Model-checking a code base: `pflow extract`
+
+ProvenFlow's diagrams are models someone draws. `pflow extract` builds them from existing code
+instead: the state machines hidden in its fields, the lifecycles of the resources it holds, the
+contracts of the design patterns it uses, and the dependencies between its layers. nuXmv then
+checks every model. A problem is reported with:
+- the code path that shows it (the counterexample, written as the calls that lead there, with
+  file and line);
+- a concrete fix;
+- when an LLM is enabled, a patch that the tool re-checks before calling it verified.
+
+The use it was built for is **checking code written by AI assistants**. That code compiles and
+passes its tests, yet it can still:
+- forget a state in a switch;
+- write a status after an `await` without re-checking it;
+- start a timer twice;
+- construct a singleton with `new`;
+- import the UI from the core.
+
+Linters see single lines, and tests see the paths someone thought of. A model checker explores
+every order in which the methods can be called.
+How this compares with static analysers, software model checkers, specification mining and LLM
+code review is in [the state of the art, section 2.8](state-of-the-art.md#28-checking-a-code-base-static-analysis-software-model-checking-specification-mining-llm-review).
+
+- [Quick start](#quick-start)
+- [Run it on ProvenFlow yourself](#run-it-on-provenflow-yourself)
+- [What is extracted and checked](#what-is-extracted-and-checked)
+- [How it works](#how-it-works)
+- [What the results mean (soundness)](#what-the-results-mean-soundness)
+- [provenflow.config.json](#provenflowconfigjson)
+- [LLM assistance, verified](#llm-assistance-verified)
+- [Outputs and CI](#outputs-and-ci)
+- [ProvenFlow checked by ProvenFlow](#provenflow-checked-by-provenflow)
+
+## Quick start
+
+```sh
+npm install && npm run build
+# nuXmv checks every property; without NUXMV_PATH an explicit-state checker covers the standard ones
+NUXMV_PATH=/path/to/nuXmv npx pflow extract path/to/project
+```
+
+```
+src/core/order.ts:8: error [property-violated] Order.status violates the property declared in
+  provenflow.config.json: AG (state = 'cancelled' -> AG state != 'shipped')
+  Counterexample: draft, Order.cancel -> cancelled, Order.pay -> paid, Order.ship -> shipped.
+    fix: Follow the counterexample: the transition that breaks the property is the code to change.
+src/core/order.ts:18: warning [stale-write-after-await] Order.pay sets Order.status to paid after
+  an await, relying on a check made before it; other code (Order.submit, Order.cancel, Order.ship)
+  can change Order.status meanwhile.
+    fix: Re-check the state after the await before writing, e.g. `if (status !== 'submitted') return;`
+src/ui/widgets.ts:7: warning [resource-leak] Poller can lose the interval held in this.timer ...
+  Counterexample: idle, Poller.start -> held, Poller.start -> leaked.
+...
+10 files, 10 models, 31 properties (nuXmv): 5 error(s), 18 warning(s), 4 note(s).
+Report: .provenflow/extract/report.md
+```
+
+(From the test fixture `packages/extract/test/fixtures/shop`, a small project with one bug of
+each kind.)
+
+The report folder also contains:
+- the models as `.pflow` files: open one in the editor to see the diagram, check it and replay a
+  counterexample;
+- `report.sarif`, for GitHub code scanning;
+- a test skeleton for each counterexample, to confirm the bug on the real code.
+
+## Run it on ProvenFlow yourself
+
+ProvenFlow ships its own `provenflow.config.json`, so it can check its own code in one command:
+
+```sh
+cd provenflow
+npm install && npm run build
+export NUXMV_PATH=/path/to/nuXmv      # optional: without it, the explicit-state checker is used
+npm run check:code                     # = pflow extract . --fail-on warning
+```
+
+What you should see:
+- about 87 files and 18 models (state machines of the Angular app, resource lifecycles, singleton
+  contracts, the layer graph);
+- about 48 properties checked;
+- **0 errors, 0 warnings**, and around 20 notes (long functions, and states only reachable
+  through computed writes).
+
+Then look at the results:
+- **Read the report:** `open .provenflow/extract/report.md`.
+- **See a model as a diagram:** run `npm start`, open http://localhost:3000, choose File → Open
+  .pflow…, and pick for example `.provenflow/extract/models/machine-App.tab.pflow` or
+  `lifecycle-TracePanel-interval-timer.pflow`. Then ▶ Check.
+- **Make it fail:** break a rule and run it again. For example, import `@provenflow/server` from
+  `packages/language/src/index.ts` (a layer violation). Or remove `this.disconnect();` at the
+  start of `LiveLink.connect` in `packages/app/src/app/live-link.ts`: that is an EventSource leak,
+  and the counterexample is `connect, connect`. The command exits with code 5 and names the file,
+  the line and a fix.
+- **With an LLM:** add `-- --llm anthropic:claude-sonnet-5 --llm-fixes 3` (with
+  `ANTHROPIC_API_KEY` set), or `-- --llm ollama:<model>` for a local model. The report then shows
+  the proposed patches, each marked verified or not.
+
+The same command, `npx pflow extract <dir>`, works on any TypeScript/Python project. Without a
+config it extracts and checks everything that needs no declared intent.
+
+## What is extracted and checked
+
+Languages: TypeScript and JavaScript (with the type checker), Angular templates, and Python 3.10+
+(with Python's own `ast` module).
+
+### State machines
+
+Any field or variable typed as a finite set of values becomes a machine. That includes:
+- a union of string literals or an enum;
+- an Angular `signal<Phase>` or an RxJS `BehaviorSubject<Phase>`;
+- a Python `Enum` or `Literal[...]`, or a `status`/`state`/`phase`-like attribute set to string
+  literals;
+- a property of an interface when its name is state-like (`status`, `state`, `phase`, `mode`...).
+
+Machines declared with XState, LangGraph, CrewAI Flows or python-transitions are read too.
+
+| rule | severity | checked by |
+| --- | --- | --- |
+| `unreachable-state`: a declared value is never set (and code comparing against it is dead) | warning | nuXmv `EF state = v` |
+| `cannot-settle`: from some state the machine never gets back to its initial or final states | warning | nuXmv `AG EF (initial \| final)` |
+| `stuck-state`: a reachable state no code leaves, that does not look final | warning | model graph |
+| `unhandled-state`: a `switch`/`match` over the variable misses values and has no default | warning | analysis |
+| `stale-write-after-await`: a write after an `await` relies on a check made before it, while other methods write the variable | warning | analysis |
+| `property-violated`: a property declared in the config is false | error | nuXmv |
+
+### Resource lifecycles (typestate)
+
+These resources are tracked, per owning class:
+- timers (`setInterval`, and `setTimeout` kept in a field);
+- listeners on `window`, `document` or `process`;
+- `EventSource`/`WebSocket`, observers and Cytoscape instances;
+- RxJS subscriptions;
+- child processes, temporary directories, files and locks.
+
+Each one gets a model with the states `idle`, `held`, `leaked` and `disposed`. Its events are the
+class's public methods and dispose hooks (`ngOnDestroy`, `DestroyRef.onDestroy`, `dispose`,
+`close`...), followed through the private methods they call.
+
+| rule | severity | checked by |
+| --- | --- | --- |
+| `resource-leak`: the resource can be lost, i.e. acquired again while held, or held when the object is disposed or dropped | warning | nuXmv `INVARSPEC !(state = leaked)` |
+| `release-not-guaranteed`: a function releases a temp dir, file or lock only on the normal path | warning | analysis (release outside `finally`/`with`) |
+| `unremovable-listener`: an inline listener on a global target, which can never be removed | warning | analysis |
+
+### Design patterns
+
+Patterns are recognised from the code's shape. Where a pattern has behaviour, the tool builds a
+contract model for nuXmv to check.
+
+| pattern | recognised by | checked | rule |
+| --- | --- | --- | --- |
+| Singleton | `@Injectable({ providedIn: 'root' })`, private constructor + static instance, Python `__new__` | never two instances (model: `none/one/many`); no `new` outside tests | `singleton-bypassed` |
+| Observer | a method adds its parameter to a collection, another calls each element | an observer can always detach: `AG (attached -> EF detached)` | `observer-cannot-unsubscribe` |
+| Builder | 3+ fluent methods returning `this`, plus `build()` | never builds unconfigured, unless `build()` validates | `builder-builds-unconfigured` |
+| State | classes of one interface returning each other's instances | every state class is reachable | `unreachable-state` |
+| Strategy | 2+ implementations of an interface or abstract class; function types | no implementation only throws (Liskov) | `strategy-not-implemented` |
+| Adapter / Decorator | implements an interface and forwards most methods to a field | no forwarded method only throws | `adapter-incomplete` |
+| Command | implementations with `execute()` | all can be undone if some can | `command-missing-undo` |
+| Factory | `create*`/`make*`/`from*` returning new instances | products share a supertype | `factory-products-unrelated` |
+| Facade | a package's entry module | other packages import only through it | `facade-bypassed` |
+| Dispatch | a `switch` over a union (command kinds, strategy keys, message types) | every kind handled or an explicit default | `non-exhaustive-dispatch` |
+
+A pattern declared in the config but not found is an error (`pattern-expected`), and the report
+explains how to implement it.
+
+### Architecture
+
+Imports are resolved by the TypeScript compiler, or by module paths for Python. They are grouped
+by the layers of the config (by default, by top-level package).
+
+- **`layer-violation`** (error): a layer imports one it may not use. Every offending import is
+  listed.
+- **`layer-cycle`** (error): a layer depends on itself through others. This is proved by nuXmv on
+  the layer graph (`AG (state = L -> AX !EF state = L)`), and the counterexample is the import
+  chain.
+- **`import-cycle`** (warning): files importing each other in a cycle. Type-only imports don't
+  count.
+- **`facade-bypassed`** (warning): a deep import into another package, instead of its entry.
+
+### Paradigm
+
+Each layer gets a profile, reported whether or not a style is declared:
+- how object-oriented or functional it is (methods against free functions);
+- pure and higher-order functions;
+- mutations per 100 lines;
+- mutable globals;
+- inheritance depth.
+
+When the config declares a layer's style, these rules apply:
+
+- **functional:**
+  - `fp-mutates-argument`: an exported function changes its input;
+  - `fp-writes-outer-state`;
+  - `fp-mutable-global`;
+  - `fp-class`: a class with mutable fields. Immutable classes are values and are allowed.
+- **object-oriented:**
+  - `oop-mutable-global`: state outside any object;
+  - `oop-mutates-foreign-object`: "tell, don't ask".
+- **all styles:**
+  - `god-class`;
+  - `deep-inheritance`;
+  - `long-function` (note);
+  - `many-parameters` (note).
+
+## How it works
+
+```
+source ──► facts (TypeScript checker · Python ast) ──► models ──► nuXmv ──► findings ──► report
+                                                          ▲                   │
+                                         provenflow.config.json        optional LLM: resolve,
+                                                                        suggest, patch → re-check
+```
+
+1. **Facts.** The TypeScript front end builds one program over the project, so the type checker
+   knows the type of every expression. That is how `this.status.set(x)` is recognised as a write
+   of a `WritableSignal<'idle' | 'running'>`. Angular templates are included: each event handler
+   and binding (`(click)="tab.set('model')"`, `@if (tab() === 'model')`) becomes a method of its
+   component, and its facts are reported at the template's line. The Python front end runs
+   `python3` on the files. Both produce the same facts (`packages/extract/src/ir.ts`), so every
+   analysis after that is language-independent.
+2. **From which states does a write happen?** From the conditions around it: `if`, ternaries, `&&`
+   and `||`, `case` labels (including fall-through), `includes` on literal arrays, and early
+   returns (`if (status !== 'draft') return;`). Earlier writes in the same function count too
+   (`status = 'loading'; … status = 'done'`), and so does `try`/`catch` (the try block may have run
+   partly). Without any of these, the write can happen in any state.
+3. **Computed values.** When a function writes one of its parameters (`this.state = to`), the
+   values come from the literal arguments at every call site. Any value still unknown leaves the
+   write out of the model, is listed in the model's notes, and lowers the severity of that
+   machine's reachability findings to notes. It is also what the LLM step is asked about.
+4. **`await`.** A write that follows an `await` without re-checking the state is modelled as
+   possible from any state when other methods also write the variable: that is what can really
+   happen. It is also reported as `stale-write-after-await`.
+5. **Models and properties.** Every model is an ordinary ProvenFlow diagram, run through the same
+   nuXmv generator as a drawn one. Every property records the finding it stands for.
+6. **Verification.** nuXmv checks the models. Each false property becomes a finding, and its trace
+   is replayed as code events ("Poller.start → held, Poller.start → leaked", with the file and
+   line of each step). Without nuXmv, an explicit-state checker decides the standard properties.
+   Properties from the config or the LLM are then reported as not checked.
+
+## What the results mean (soundness)
+
+A model is an **abstraction** of the code: conditions the tool cannot read (on other variables,
+on data) are dropped, so the model can do more than the code.
+
+- **A property proved by nuXmv** ("never leaked", "no layer cycle") holds for every run of the
+  model. It holds for the code too, *as far as the model captures it*. What it does not capture:
+  - writes through aliases or reflection;
+  - state changed by code outside the project;
+  - computed values that stay unresolved (listed in the model's notes).
+- **A counterexample** is a run of the model. The code may not allow it, because of a condition on
+  another variable. That is why each counterexample comes with a test skeleton in `scenarios/`:
+  - replay the calls on the real code;
+  - if the expectation fails, the bug is real;
+  - if it passes, add the missing guard to the config (a terminal state, or a property that uses
+    it) and the finding goes away.
+- **Patterns** are recognised by their shape, so a class can be misread. Declare the patterns you
+  intend in the config: then they are checked, not guessed.
+- **Structural and paradigm rules** are heuristics with thresholds. Record accepted exceptions,
+  with the reason, in `ignore`.
+
+## provenflow.config.json
+
+Everything is optional. Without a config you still get the machines, lifecycles, patterns,
+cycles and paradigm profiles.
+
+```json
+{
+  "include": ["src/**"],
+  "exclude": ["**/test/fixtures/**"],
+  "layers": [
+    { "name": "core", "paths": ["src/core/**"], "mayImport": [], "style": "functional" },
+    { "name": "ui", "paths": ["src/ui/**"], "mayImport": ["core"], "style": "object-oriented" }
+  ],
+  "packageEntries": true,
+  "patterns": [{ "subject": "Session", "pattern": "singleton" }],
+  "machines": {
+    "Order.status": {
+      "terminal": ["shipped", "cancelled"],
+      "specs": ["AG (state = 'cancelled' -> AG state != 'shipped')"]
+    }
+  },
+  "ignore": [{ "rule": "fp-class", "subject": "Parser", "reason": "Compiler visitor, never shared." }],
+  "limits": { "classMethods": 30, "classLines": 600, "functionLines": 80, "inheritanceDepth": 3, "functionParams": 6 }
+}
+```
+
+- `machines[name].specs` are LTL or CTL properties over `state`. Values can be written as in the
+  code (`state = 'no-machine'`) or as model ids.
+- `terminal` lists the states in which the machine may rest. It replaces the naming heuristic
+  (`done`, `failed`, `idle`...) for "can settle" and "stuck".
+- `patterns[].pattern` is one of `singleton`, `observer`, `factory`, `strategy`, `builder`,
+  `adapter`, `decorator`, `state`, `command` and `facade`.
+- `ignore` entries match on `rule`, and optionally on `subject` and on a `file` glob. Give a
+  `reason`: the file then documents the design decisions.
+
+## LLM assistance, verified
+
+```sh
+ANTHROPIC_API_KEY=... pflow extract . --llm anthropic:claude-sonnet-5 --llm-fixes 5
+OPENAI_API_KEY=... pflow extract . --llm openai:<model>      # or any OpenAI-compatible server: OPENAI_BASE_URL
+pflow extract . --llm ollama:qwen2.5-coder                   # local model, OLLAMA_HOST
+```
+
+LLMs are non-deterministic, so nothing they say is used without a check:
+
+| the LLM is asked | its answer is kept only if |
+| --- | --- |
+| which values a computed write can set (`this.status.set(next)`) | it cites a write the parser found (file and line) and uses values of the variable's type |
+| which requirements a machine should satisfy (from names, comments, transitions) | the property parses; nuXmv then decides whether the code satisfies it |
+| a patch for a finding, as exact search/replace edits | the edits apply, and re-running *every* check on the patched files removes the finding without adding a new warning; otherwise the patch is shown as "not verified" |
+
+The patch check runs in memory, through file overrides passed to both front ends. Your working
+tree is never modified. Answers are cached under `.provenflow/cache/` by the hash of the prompt,
+so a run can be reproduced and a second run costs nothing.
+
+## Outputs and CI
+
+`pflow extract <dir> [-o out]` writes to `<dir>/.provenflow/extract/` by default:
+
+| file | for |
+| --- | --- |
+| `report.md` | people: findings by category, with fixes and counterexample tables, patterns found, paradigm profile, dependencies, models |
+| `report.json` | tools |
+| `report.sarif` | GitHub code scanning: findings appear on the pull request |
+| `models/*.pflow` | the ProvenFlow editor: Open .pflow… to see, check and replay |
+| `scenarios/*` | a vitest/pytest skeleton per counterexample |
+
+The exit code is 5 when there are findings at or above `--fail-on`. That is `error` by default;
+use `warning` for stricter gates, or `none`. This is the GitHub Actions step ProvenFlow uses on
+itself:
+
+```yaml
+- run: npx pflow extract . --fail-on warning -o provenflow-report
+- uses: github/codeql-action/upload-sarif@v3
+  if: always()
+  with: { sarif_file: provenflow-report/report.sarif, category: provenflow }
+```
+
+## ProvenFlow checked by ProvenFlow
+
+ProvenFlow's own `provenflow.config.json` declares:
+- its layers, and what each may import: `language` imports nothing; `extract` imports
+  `language`; `server` imports `language` and `extract`; `app` imports `language`;
+- their styles: functional for `language`, `extract` and `server`, object-oriented for the
+  Angular `app`;
+- the singletons it relies on;
+- the two packages used as facades.
+
+The first run on the repository found these, and the code was changed accordingly:
+
+| finding | change |
+| --- | --- |
+| `stale-write-after-await` in `App.check`: after a slow check it switched to the Console tab even if the user had moved on | only switch if the user is still on the results (`packages/app/src/app/app.ts`) |
+| `non-exhaustive-dispatch` in `astToModel`: three element kinds fell through the `switch` silently | explicit cases for them and an exhaustive `never` default (`packages/language/src/ast-to-model.ts`) |
+| `god-class` `DiagramStore` (31 methods) | simulation moved into pure functions (`packages/app/src/app/simulation.ts`) |
+| `god-class` `Extractor` (39 methods, 927 lines), in the extractor itself | split by responsibility: templates, resources, code shape and context modules |
+| `fp-mutates-argument` in `mergeFacts` and the LLM steps (layer declared functional) | they return new values instead of changing their arguments |
+
+Some findings were decided instead of changed. They are recorded in `ignore` with a reason:
+- the memoised Langium services in `parse.ts`;
+- the runtime monitor class, which is stateful by nature;
+- CodeMirror's `token()` contract.
+
+Other findings showed where the extractor was imprecise, and led to these improvements:
+- reading Angular templates;
+- taking parameter values from call sites;
+- treating only public methods as lifecycle events;
+- no longer treating plain data "kinds" as state machines.
+
+CI now runs `pflow extract . --fail-on warning`, so a change that breaks one of these properties
+fails the build.

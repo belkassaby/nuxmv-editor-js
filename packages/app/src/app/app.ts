@@ -204,8 +204,10 @@ export class App implements OnInit {
         await this.api.verify();
         const v = this.store.verification();
         const firstTrace = v?.results.findIndex(r => r?.trace) ?? -1;
-        if (v?.requestError || (v?.errors.length ?? 0) > 0) this.tab.set('console');
-        else if (firstTrace >= 0) this.flash('Some properties are false: open a counterexample to replay it on the diagram.');
+        if (v?.requestError || (v?.errors.length ?? 0) > 0) {
+            // The check took a while: only move to the console if the user is still on the results.
+            if (this.tab() === 'properties') this.tab.set('console');
+        } else if (firstTrace >= 0) this.flash('Some properties are false: open a counterexample to replay it on the diagram.');
     }
 
     showTrace(): void {

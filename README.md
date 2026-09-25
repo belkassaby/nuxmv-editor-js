@@ -8,6 +8,12 @@ the diagram. From the same diagram it generates a Python runtime with monitors, 
 editor or Jupyter, trace conformance checks and probabilistic analysis. The `pflow` command-line tool
 does the same from a terminal or CI.
 
+It also works the other way round, from code to model: `pflow extract` builds verified models of an
+existing (or AI-generated) code base. It extracts the code's state machines, resource lifecycles,
+design-pattern contracts and layer dependencies, and checks them with nuXmv. It reports each bug
+with the code path that shows it and a fix, and an optional LLM can propose patches that the tool
+re-checks. See [Model-checking a code base](#model-checking-a-code-base).
+
 The project was called `nuxmv-editor-js` until it was renamed, and diagrams used the `.nxd` extension.
 The editor still opens `.nxd` files and saves them as `.pflow`.
 
@@ -313,6 +319,61 @@ verified transitions never trip a monitor of a property nuXmv proved. On a model
 defect, the monitors report the same properties nuXmv refutes. The editor's simulator, the
 conformance checker and the Python runtime also agree step by step on models with guards and data.
 
+## Model-checking a code base
+
+`pflow extract` turns a TypeScript/JavaScript, Angular or Python project into models and checks
+them with nuXmv:
+
+- **State machines:** from every field typed as a finite set of values (a string-literal union, an
+  enum, `signal<Phase>`, a Python `Enum`/`Literal`). It finds:
+  - values that are declared but never set (and the dead branches testing them);
+  - states the machine can never leave or settle from;
+  - `switch`/`match` statements missing cases;
+  - writes after an `await` that rely on a check made before it.
+- **Resource lifecycles:** for timers, global listeners, EventSources, observers, processes, temp
+  dirs, files and locks. It finds a resource acquired twice, one never released on dispose, and a
+  release that is skipped on errors.
+- **Design patterns:** singleton, observer, builder, State, strategy, adapter/decorator, command,
+  factory and facade are recognised. Each is checked against its contract: never two singletons,
+  an observer can unsubscribe, no unconfigured build, every state reachable, and so on.
+- **Architecture and paradigm:** layers and what each may import (cycles are proved by nuXmv),
+  deep imports that bypass a facade, and file cycles. For the declared style of each layer
+  (functional or object-oriented): mutated arguments, hidden global state, god classes, deep
+  inheritance.
+
+```sh
+NUXMV_PATH=/path/to/nuXmv npx pflow extract path/to/project          # report in path/to/project/.provenflow/extract/
+npx pflow extract . --fail-on warning                                # CI gate (exit 5), report.sarif for code scanning
+npx pflow extract . --llm anthropic:claude-sonnet-5 --llm-fixes 5    # or openai:<model>, ollama:<model>
+```
+
+Each finding gives:
+- the location;
+- the counterexample as code events, e.g. `Poller.start -> held, Poller.start -> leaked`;
+- a fix.
+
+The models are `.pflow` files: open them in the editor to see and replay them. An LLM, if you
+enable one, resolves computed values, suggests requirements and proposes patches. Its answers are
+only kept after deterministic checks: a cited write must exist, a property must parse and is
+decided by nuXmv, and a patch must pass a full re-run of the checks. Declare what your code
+promises (layers, styles, patterns, machine properties, accepted exceptions) in
+`provenflow.config.json`.
+
+**Try it on ProvenFlow itself.** The repository has its own `provenflow.config.json`, and CI runs
+this check:
+
+```sh
+npm install && npm run build
+NUXMV_PATH=/path/to/nuXmv npm run check:code     # pflow extract . --fail-on warning
+open .provenflow/extract/report.md               # models in .provenflow/extract/models/*.pflow
+```
+
+The full guide is in [docs/code-model-checking.md](docs/code-model-checking.md). It covers:
+- every rule and how it is checked;
+- how the extraction works, and what a proof or a counterexample means;
+- the config reference and the LLM trust model;
+- what the first run on ProvenFlow found, and what was changed.
+
 ## Probabilistic analysis
 
 Give transitions a probability (`prob 0.3` in the text, or in the inspector) and the
@@ -364,11 +425,21 @@ packages/
 │   ├── src/nurv.ts                     NuRV monitor synthesis plan
 │   ├── src/notebook-generator.ts       DiagramModel -> Jupyter notebook
 │   └── src/legacy-attributes.ts        import of JungToNusmv attributeData.txt
+├── extract/    @provenflow/extract   code base -> verified models (pflow extract)
+│   ├── src/typescript-*.ts             TypeScript checker front end (+ Angular templates)
+│   ├── src/python_facts.py             Python front end (ast), same facts as JSON
+│   ├── src/machines.ts                 state machines of fields with finite types
+│   ├── src/lifecycles.ts               resource typestate models
+│   ├── src/patterns.ts                 design-pattern recognition and contract models
+│   ├── src/architecture.ts  paradigm.ts  layer graph model, cycles, facades; style rules
+│   ├── src/verify.ts                   nuXmv / explicit-state checks, counterexamples -> code
+│   ├── src/llm.ts                      optional LLM (Anthropic, OpenAI-compatible, Ollama), verified
+│   └── src/report.ts                   report.md / .json / .sarif, .pflow models, scenarios
 ├── server/     @provenflow/server    Node.js + Express
 │   ├── src/nuxmv-runner.ts             spawns nuXmv (BDD / BMC / IC3), timeouts
 │   ├── src/nurv-runner.ts              runs NuRV, fixes and returns the generated monitors
 │   ├── src/app.ts                      REST API, live channel (SSE), serves the built UI
-│   └── src/cli.ts                      `pflow generate|check`
+│   └── src/cli.ts                      the `pflow` command-line tool
 └── app/        @provenflow/app       Angular UI
     └── src/app/
         ├── diagram-store.ts            signals store keeping text and diagram in sync
@@ -542,6 +613,7 @@ NUXMV_PATH=/path/to/nuXmv npx pflow check examples/mutex.pflow --engine bdd
 | `pflow prob <d.pflow> --reach EXPR [--within K] [--steps EXPR] [--visits EXPR --until EXPR]` | probabilistic analysis |
 | `pflow prism <d.pflow> [-o m.pm]` | PRISM / Storm model and properties |
 | `pflow nurv <d.pflow> [-o dir]` | NuRV full-LTL monitors (`NURV_PATH`) |
+| `pflow extract <dir> [-o out] [--config f] [--fail-on error\|warning\|none] [--llm p:model] [--llm-fixes N]` | verified models of a code base, findings with fixes (exit 5 on findings) |
 
 ## REST API
 
@@ -561,8 +633,13 @@ The response contains the raw `stdout`/`stderr` and the parsed `results` (proper
 ## Tests
 
 ```sh
-npm test      # language, server and UI unit tests
+npm test            # language, extract, server and UI unit tests
+npm run check:code  # ProvenFlow model-checks its own code base (pflow extract . --fail-on warning)
 ```
+
+The extract tests run on `packages/extract/test/fixtures/shop`, a small TypeScript and Python
+project with one seeded bug of each kind. With `NUXMV_PATH` set they also check the nuXmv
+counterexamples.
 
 Optional tools turn on more tests, and CI installs the Python packages:
 - `NUXMV_PATH`: every example is run on real nuXmv with all engines.

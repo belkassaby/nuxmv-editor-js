@@ -8,6 +8,9 @@ on:
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -24,3 +27,18 @@ jobs:
       - run: npm run build
       # The server tests use a stand-in for nuXmv; set NUXMV_PATH to run them against the real tool.
       - run: npm test
+      # ProvenFlow model-checks its own code base (provenflow.config.json): state machines, resource
+      # lifecycles, design patterns, layers. New findings fail the build; they also show on pull
+      # requests through code scanning.
+      - run: node packages/server/out/cli.js extract . --fail-on warning -o provenflow-report
+      - uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        continue-on-error: true
+        with:
+          sarif_file: provenflow-report/report.sarif
+          category: provenflow
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: provenflow-report
+          path: provenflow-report

@@ -274,6 +274,11 @@ function toModel(g: Graph): DiagramModel {
     return model;
 }
 
+/** Turns any name into a nuXmv identifier that is unique in `used` (which it extends). */
+export function nuxmvIdentifier(raw: string, used: Set<string>): string {
+    return identifier(raw, used);
+}
+
 function identifier(raw: string, used: Set<string>): string {
     let s = raw.replace(/[^\w$#]+/g, '_').replace(/^_+|_+$/g, '') || 'state';
     if (/^[0-9]/.test(s)) s = `s_${s}`;
