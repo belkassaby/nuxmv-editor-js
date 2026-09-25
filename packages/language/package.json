@@ -12,7 +12,10 @@
       "default": "./out/index.js"
     }
   },
-  "files": ["out", "src"],
+  "files": [
+    "out",
+    "src"
+  ],
   "scripts": {
     "langium:generate": "langium generate",
     "build": "langium generate && tsc -b tsconfig.json",
@@ -25,6 +28,7 @@
   "devDependencies": {
     "langium-cli": "~4.4.0",
     "typescript": "~6.0.3",
-    "vitest": "^5.0.1"
+    "vitest": "^5.0.1",
+    "xstate": "^5.33.2"
   }
 }

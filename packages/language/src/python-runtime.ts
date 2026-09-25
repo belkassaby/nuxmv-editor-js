@@ -329,11 +329,12 @@ class StateMachine:
     * Runtime monitors re-check the monitorable properties on every step.
     """
 
-    def __init__(self, initial=None, *, strict=True, listeners=(), on_invalid="raise"):
+    def __init__(self, initial=None, *, strict=True, listeners=(), on_invalid="raise", thread_safe=True):
         """on_invalid: what send() does with an event the model does not allow now:
         "raise" (InvalidTransition), "return" (a falsy Rejected with feedback for an LLM),
         "escalate:<EVENT>" (fire that verified escalation event instead), or a callable
-        handler(fsm, rejected) whose result send() returns."""
+        handler(fsm, rejected) whose result send() returns.
+        thread_safe=False drops the lock around send() (single-threaded hosts such as Temporal workflows)."""
         start = State(initial) if initial is not None else INITIAL_STATES[0]
         if start not in INITIAL_STATES:
             raise InvalidTransition("%s is not an initial state (initial: %s)" % (start.value, ", ".join(s.value for s in INITIAL_STATES)))
@@ -347,10 +348,22 @@ class StateMachine:
         self._rejection_listeners = []
         self.on_invalid = on_invalid
         self.rejections = []
-        self._lock = __import__("threading").RLock()
+        self._lock = __import__("threading").RLock() if thread_safe else __import__("contextlib").nullcontext()
         self.monitors = [_Monitor(*m) for m in MONITOR_SPECS]
         self._check_monitors(record=None)
         self._notify(None)
+
+    @classmethod
+    def restore(cls, state, variables=None, **options):
+        """A machine in a given state (e.g. from a framework's serialised state). Monitors start
+        afresh, so past-time properties only see the steps made from here."""
+        fsm = cls(**options)
+        fsm.state = State(state)
+        fsm.visited = [fsm.state]
+        fsm.variables.update(variables or {})
+        for monitor in fsm.monitors:
+            monitor.reset()
+        return fsm
 
     # -- queries -----------------------------------------------------------
     @property

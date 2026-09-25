@@ -1,5 +1,5 @@
 import { effect, Injectable, inject, signal } from '@angular/core';
-import { generateNotebook, generatePython, generatePythonTests, type GeneratedPython } from '@nuxmv-editor/language';
+import { exportToFramework, generateNotebook, generatePython, generatePythonTests, type Framework, type GeneratedPython } from '@nuxmv-editor/language';
 import { DiagramStore } from './diagram-store';
 import { downloadText } from './file-io';
 
@@ -34,6 +34,11 @@ export class CodeExport {
     async downloadPython(): Promise<void> {
         const py = await generatePython(this.store.model(), { sourceName: this.store.fileName() });
         downloadText(`${py.moduleName}.py`, py.code, 'text/x-python');
+    }
+
+    async downloadFramework(framework: Framework): Promise<void> {
+        const out = await exportToFramework(this.store.model(), framework);
+        downloadText(out.fileName, out.code, 'text/plain');
     }
 
     async downloadTests(): Promise<void> {

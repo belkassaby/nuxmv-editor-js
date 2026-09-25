@@ -1,4 +1,5 @@
 import { Component, computed, inject, input, signal } from '@angular/core';
+import { FRAMEWORKS, type Framework } from '@nuxmv-editor/language';
 import { CodeExport } from '../code-export';
 import { DiagramStore } from '../diagram-store';
 import { downloadText } from '../file-io';
@@ -13,6 +14,13 @@ export class OutputPanel {
     readonly view = input<'model' | 'python' | 'console'>('model');
     readonly code = inject(CodeExport);
     readonly showBanner = signal(false);
+    readonly frameworks = FRAMEWORKS;
+
+    exportTo(select: HTMLSelectElement): void {
+        const value = select.value as Framework | '';
+        select.value = '';
+        if (value) void this.code.downloadFramework(value);
+    }
     readonly copied = signal(false);
 
     readonly consoleText = computed(() => {

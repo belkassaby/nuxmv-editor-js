@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { readFile, writeFile } from 'node:fs/promises';
 import { parseArgs } from 'node:util';
-import { checkConformance, generateNotebook, generatePython, generatePythonTests, generateSmv, matchResults, parseDiagram, parseTrace } from '@nuxmv-editor/language';
+import { checkConformance, exportToFramework, FRAMEWORKS, generateNotebook, generatePython, generatePythonTests, generateSmv, matchResults, parseDiagram, parseTrace, type Framework } from '@nuxmv-editor/language';
 import { configFromEnv, ENGINES, runNuxmv, type Engine } from './nuxmv-runner.js';
 
 const USAGE = `Usage:
@@ -14,6 +14,8 @@ const USAGE = `Usage:
                                                  nuXmv first to include verdicts and counterexamples
   nxd pytest <diagram.nxd> [-o test_module.py] [--verify]
                                                  write Hypothesis property-based tests for the Python module
+  nxd export <xstate|langgraph|burr|temporal> <diagram.nxd> [-o file]
+                                                 export the verified machine to an agent/workflow framework
   nxd conform <diagram.nxd> <run.jsonl|otel.json>
                                                  check a recorded run against the model (exit 4 if it deviates)`;
 
@@ -28,7 +30,10 @@ async function main(): Promise<number> {
             verify: { type: 'boolean', default: false }
         }
     });
-    const [command, file, second] = positionals;
+    const [command, ...rest] = positionals;
+    // nxd export <framework> <diagram>: the diagram is the second argument.
+    const framework = command === 'export' ? rest.shift() : undefined;
+    const [file, second] = rest;
     if (values.help || !command || !file) {
         console.log(USAGE);
         return values.help ? 0 : 2;
@@ -83,6 +88,14 @@ async function main(): Promise<number> {
         const out = values.output ?? tests.fileName;
         await writeFile(out, tests.code, 'utf8');
         console.log(`wrote ${out}`);
+        return 0;
+    }
+    if (command === 'export') {
+        if (!FRAMEWORKS.some(f => f.id === framework)) throw new Error(`Unknown framework '${framework}'. Use one of ${FRAMEWORKS.map(f => f.id).join(', ')}.`);
+        const out = await exportToFramework(parsed.model, framework as Framework);
+        const target = values.output ?? out.fileName;
+        await writeFile(target, out.code, 'utf8');
+        console.log(`wrote ${target}${out.requires.length ? ` (needs ${out.requires.join(', ')}: nxd python ${file})` : ''}`);
         return 0;
     }
     if (command === 'conform') {

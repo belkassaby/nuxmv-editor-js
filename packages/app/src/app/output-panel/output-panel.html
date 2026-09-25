@@ -19,6 +19,10 @@
     <span class="spacer"></span>
     <button type="button" (click)="copy(code.python()?.code ?? '')" [disabled]="!code.python()">{{ copied() ? 'Copied' : 'Copy' }}</button>
     <button type="button" (click)="code.downloadPython()" [disabled]="!code.python()">Download {{ code.python()?.moduleName ?? 'module' }}.py</button>
+    <select #fw (change)="exportTo(fw)" [disabled]="!code.python()" aria-label="Export to a framework" title="The Python targets use the generated module: download it too">
+      <option value="" selected>Export to…</option>
+      @for (f of frameworks; track f.id) { <option [value]="f.id" [title]="f.description">{{ f.label }}</option> }
+    </select>
     <button type="button" (click)="code.downloadTests()" [disabled]="!code.python()" title="Hypothesis property-based tests: random runs must follow the verified model">Download tests</button>
     <button type="button" class="primary" (click)="code.downloadNotebook()" [disabled]="!code.python()" title="Notebook with the module, a live diagram widget, a walk-through and counterexample replays">Jupyter notebook</button>
   </div>
