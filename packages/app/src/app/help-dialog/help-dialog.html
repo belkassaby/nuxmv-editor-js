@@ -8,9 +8,9 @@
     </nav>
     <button type="button" class="icon" (click)="close()" aria-label="Close help">×</button>
   </header>
-  @if (section() === 'symbols' || section() === 'glossary') {
+  @if (section() === 'symbols' || section() === 'glossary' || section() === 'walkthroughs') {
     <div class="help-search">
-      <input type="search" placeholder="Search symbols and terms…" [value]="query()" (input)="query.set($any($event.target).value)" aria-label="Search" />
+      <input type="search" placeholder="Search…" [value]="query()" (input)="query.set($any($event.target).value)" aria-label="Search" />
       <span class="muted small">
         Nomenclature: <a href="https://en.wikipedia.org/wiki/List_of_logic_symbols" target="_blank" rel="noopener">List of logic symbols ↗</a>
       </span>
@@ -27,8 +27,11 @@
         <li>Mark one or more <strong>initial</strong> states (double border).</li>
         <li>Enter <strong>properties</strong> (LTL, CTL or invariants) and optional fairness constraints.</li>
         <li><strong>Check</strong> with nuXmv. False properties come with a counterexample that can be replayed on the diagram.</li>
-        <li><strong>Run</strong> it: the <em>Python</em> tab generates an implementation that only allows the verified transitions and monitors the past-time properties, plus a Jupyter notebook with a live diagram. <em>Trace → Live from Python</em> follows a running machine on this diagram.</li>
+        <li><strong>Run</strong> it: the <em>Python</em> tab generates an implementation that only allows the verified transitions and monitors the properties, a Jupyter notebook with a live diagram, property-based tests, framework exports (XState, LangGraph, Burr, Temporal) and NuRV monitors.</li>
+        <li><strong>Operate</strong> it: <em>Trace → Live from Python</em> follows (and drives) a running process; <em>Check a recorded run</em> compares a real execution with the model.</li>
+        <li><strong>Quantify</strong> it: with transition probabilities, the Properties tab computes how likely and how fast goals are reached.</li>
       </ol>
+      <p>Each of these has a <button type="button" class="link" (click)="show('walkthroughs')">walkthrough</button>. Existing LangGraph, CrewAI, Mermaid or XState graphs can be imported with <em>File → Import agent graph</em>.</p>
     </section>
     <section>
       <h3>Drawing board</h3>
@@ -60,7 +63,11 @@ s1 -> s0;
 FAIRNESS request;
 LTLSPEC G (request -> F status = busy);
 CTLSPEC NAME reset := AG EF state = s0;
-INVARSPEC level &lt;= 3;</pre>
+INVARSPEC level &lt;= 3;
+
+// Data: bounded variables changed by transitions with guards, updates and probabilities
+variables {{ '{' }} retries : 0..3 := 0; approved : boolean := FALSE; {{ '}' }}
+s1 -> s0 : "retry" when retries &lt; 2 do retries := retries + 1 prob 0.3;</pre>
       <p>Expressions use the nuXmv syntax: <code>! &amp; | xor -&gt; &lt;-&gt;</code>, comparisons, LTL
         <code>G F X U V</code> and CTL <code>AG AF AX EG EF EX A[p U q] E[p U q]</code>. The variable
         <code>state</code> holds the current state name.</p>
@@ -80,6 +87,31 @@ INVARSPEC level &lt;= 3;</pre>
         <button type="button" class="link" (click)="show('references')">references</button>, including the
         <a href="https://en.wikipedia.org/wiki/List_of_logic_symbols" target="_blank" rel="noopener">nomenclature of logic symbols ↗</a>.</p>
     </section>
+  </div>
+  }
+  @case ('walkthroughs') {
+  <div class="help-body">
+    <p class="muted">Step-by-step guides for each feature. Most come with an example to follow along.</p>
+    @for (w of walkthroughs(); track w.id) {
+      <div class="walkthrough" [id]="'walkthrough-' + w.id" [class.open]="isOpen(w.id)">
+        <button type="button" class="walkthrough-head" (click)="toggle(w.id)" [attr.aria-expanded]="isOpen(w.id)">
+          <span class="chevron" aria-hidden="true">{{ isOpen(w.id) ? '▾' : '▸' }}</span>
+          <span><strong>{{ w.title }}</strong><br /><span class="muted small">{{ w.goal }}</span></span>
+        </button>
+        @if (isOpen(w.id)) {
+          <ol>
+            @for (step of w.steps; track $index) {
+              <li>{{ step.text }}@if (step.code) { <pre class="code small">{{ step.code }}</pre> }</li>
+            }
+          </ol>
+          @if (w.example) {
+            <button type="button" class="primary" (click)="loadExample(w.example)">Load the example</button>
+          }
+        }
+      </div>
+    } @empty {
+      <p class="muted">No walkthrough matches “{{ query() }}”.</p>
+    }
   </div>
   }
   @case ('symbols') {

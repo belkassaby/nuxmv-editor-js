@@ -3,6 +3,7 @@ import { Component, computed, inject, OnDestroy, signal } from '@angular/core';
 import { checkConformance, parseTrace } from '@nuxmv-editor/language';
 import { DiagramStore } from '../diagram-store';
 import { pickFile } from '../file-io';
+import { HelpService } from '../help-dialog/help.service';
 import { LiveLink } from '../live-link';
 import { CodeExport } from '../code-export';
 
@@ -19,6 +20,7 @@ export class TracePanel implements OnDestroy {
     readonly store = inject(DiagramStore);
     readonly live = inject(LiveLink);
     readonly code = inject(CodeExport);
+    readonly help = inject(HelpService);
     readonly playing = signal(false);
     readonly origin = location.origin;
     readonly liveRows = computed(() => [...this.live.updates()].reverse().slice(0, 50));

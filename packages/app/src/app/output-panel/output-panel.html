@@ -15,7 +15,8 @@
   }
 } @else if (view() === 'python') {
   <div class="panel-bar">
-    <span class="muted small">Python runtime of this diagram: only verified transitions are allowed; invariants and past-time properties are monitored.</span>
+    <span class="muted small">Python runtime of this diagram: only verified transitions are allowed; invariants and past-time properties are monitored.
+      <button type="button" class="link small" (click)="help.walkthrough('python')">how?</button></span>
     <span class="spacer"></span>
     <button type="button" (click)="copy(code.python()?.code ?? '')" [disabled]="!code.python()">{{ copied() ? 'Copied' : 'Copy' }}</button>
     <button type="button" (click)="code.downloadPython()" [disabled]="!code.python()">Download {{ code.python()?.moduleName ?? 'module' }}.py</button>

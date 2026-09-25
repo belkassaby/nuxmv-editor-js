@@ -2,6 +2,7 @@ import { Component, computed, effect, inject, signal, untracked } from '@angular
 import { analyse, exportPrism, type ProbabilisticQuery, type ProbabilisticResult } from '@nuxmv-editor/language';
 import { DiagramStore } from '../diagram-store';
 import { downloadText } from '../file-io';
+import { HelpService } from '../help-dialog/help.service';
 
 type QueryRow = { kind: ProbabilisticQuery['kind']; target: string; bound: string; count: string };
 
@@ -15,6 +16,7 @@ type QueryRow = { kind: ProbabilisticQuery['kind']; target: string; bound: strin
 })
 export class ProbabilityPanel {
     readonly store = inject(DiagramStore);
+    readonly help = inject(HelpService);
     readonly rows = signal<QueryRow[]>([]);
     readonly results = signal<ProbabilisticResult[] | null>(null);
     readonly info = signal<string | null>(null);

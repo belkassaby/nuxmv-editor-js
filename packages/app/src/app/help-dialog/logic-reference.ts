@@ -99,6 +99,18 @@ export const GLOSSARY: GlossaryTerm[] = [
     { term: 'Tautology', aka: 'valid formula', definition: 'A formula true under every assignment of its atoms, e.g. p ∨ ¬p. A property that is a tautology tells nothing about the model.' },
     { term: 'Contradiction', aka: 'unsatisfiable formula', definition: 'A formula false under every assignment, e.g. p ∧ ¬p.' },
     { term: 'Duality', definition: 'Pairs of operators that are interdefinable through negation: G p ≡ ¬F ¬p, AG p ≡ ¬EF ¬p, AX p ≡ ¬EX ¬p, p V q ≡ ¬(¬p U ¬q).' },
+    { term: 'Guard', aka: 'when', definition: 'A condition on a transition: it can only fire in configurations where the condition holds. Guards read attributes and variables of the current state.', example: 'test -> work when retries < 2;' },
+    { term: 'Update', aka: 'do, assignment', definition: 'A change of data variables performed by a transition (all updates of a transition are simultaneous). A transition whose updates would leave a variable\'s range is disabled.', example: 'do retries := retries + 1' },
+    { term: 'Configuration', definition: 'The control state together with the values of the data variables: what the simulator, the probabilistic analysis and the runtime track.' },
+    { term: 'Stutter', definition: 'Staying in the same configuration. In this editor a configuration where no transition is enabled stutters, so every path is infinite as model checking requires.' },
+    { term: 'DTMC (discrete-time Markov chain)', aka: 'Markov chain, probabilistic model', definition: 'A transition system whose transitions carry probabilities. Here, obtained from the diagram with the prob annotations; used to compute reachability probabilities and expected steps.', example: 'P(F phase = done), E[steps until phase = done]' },
+    { term: 'PCTL', aka: 'probabilistic CTL, P=? [ F goal ]', definition: 'The logic of probabilistic model checkers such as PRISM and Storm: probability and reward operators over paths.' },
+    { term: 'Runtime verification', aka: 'runtime monitoring', definition: 'Checking properties on the execution of a real system, step by step, rather than on all executions of a model.' },
+    { term: 'Monitor', aka: 'runtime monitor', definition: 'A small program that reads the steps of a run and reports whether a property is violated (here: invariants and past-time properties in the generated code; any LTL property with NuRV).' },
+    { term: 'Monitoring under assumptions', definition: 'Runtime verification that also uses the model of the system (NuRV): a verdict can be given as soon as every continuation the model allows decides the property, earlier than from the run alone.' },
+    { term: 'Three-valued verdict', aka: 'true / false / unknown', definition: 'The answer of an LTL monitor on a finite run: true or false once the run decides the property, unknown while both are still possible.' },
+    { term: 'Trace conformance', aka: 'conformance checking', definition: 'Checking that a recorded run of the real system is a run of the model: every step follows an enabled transition and the monitored properties hold.' },
+    { term: 'Property-based testing', aka: 'Hypothesis, stateful testing', definition: 'Testing with generated inputs: here, random sequences of allowed events drive the implementation and each step is checked against the verified model.' },
     { term: 'Enumeration type', aka: 'symbolic constants, { a, b }', definition: 'An attribute that takes one of a finite set of named values.', example: 'status : { ready, busy };' },
     { term: 'Range type', aka: 'bounded integer, lo..hi', definition: 'An integer attribute restricted to an interval. Model checking needs finite domains, so counters must be bounded.', example: 'loop_count : 0..3;' }
 ];

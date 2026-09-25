@@ -50,7 +50,19 @@ developments" and removes the limitations listed in its evaluation chapter.
   links to references, including the
   [nomenclature of logic symbols](https://en.wikipedia.org/wiki/List_of_logic_symbols).
 - **Files.** Save and open `.nxd` files, export the `.smv` model, import the legacy
-  `attributeData.txt` format, and load four built-in examples.
+  `attributeData.txt` format, and load the built-in examples.
+- **Guards and bounded data.** Variables (counters, flags) updated by transitions
+  (`when retries < 2 do retries := retries + 1`), checked by nuXmv, simulated in the editor and
+  enforced by the generated code.
+- **From design to code.** A dependency-free Python runtime that only allows verified transitions
+  and monitors the properties at run time; Jupyter notebooks with a live diagram; Hypothesis
+  property-based tests; exports to XState, LangGraph, Burr and Temporal; NuRV full-LTL monitors.
+- **Operations.** A two-way live link to running processes, OpenTelemetry spans, and trace
+  conformance checking of recorded runs (JSON Lines or OpenTelemetry) against the model.
+- **Probabilities.** Transition probabilities turn the diagram into a Markov chain: probability of
+  reaching a state, expected steps and visits, and export to PRISM / Storm.
+- **Import.** Existing LangGraph (JSON, Mermaid, Python source), CrewAI Flow, Mermaid and XState
+  graphs become diagrams you can verify.
 
 ### Limitations of the original tool, now removed
 
@@ -100,9 +112,10 @@ LLM: a property that holds proves the design is safe *whatever the model decides
 Attributes label the states with the facts you want to reason about: the phase, whether a tool is
 running, whether a human is being waited on, which agent is active. Two rules keep models faithful:
 
-- **Bound every counter and unroll it into the states.** A `retry < max` guard is modelled as one
-  state per retry (`critique0`, `critique1`, …) with `loop_count` set in each. Without this, the
-  model contains the unbounded loop and termination fails (see below).
+- **Bound every counter.** Either keep it in a bounded variable with guards and updates
+  (`variables { retries : 0..3 := 0; }`, `test -> work when retries < 2 do retries := retries + 1`,
+  see *Retry budget with data*), or unroll it into one state per retry (`critique0`, `critique1`,
+  …). Without a bound the model contains an unbounded loop and termination fails (see below).
 - **Give terminal states a self-loop** (`done -> done;`). nuXmv reasons about infinite paths; a state
   without a successor is reported as a dead end and made to stutter.
 
@@ -211,63 +224,118 @@ not check what the LLM writes, nor that your implementation matches the diagram.
 sync (one code state per diagram state is the simplest way), and keep the facts you care about,
 such as approvals, counters and the active agent, as attributes so they can be checked.
 
-## From verified diagram to running Python
+## From verified diagram to running code
 
-A verified design is only useful if the running system follows it. The **Python** tab (and
-`File → Export`) turns the diagram into code:
+A verified design is only useful if the running system follows it. Everything below is generated
+from the diagram, from the **Python** tab, the **File** menu or the `nxd` command line.
 
-- **`<name>_fsm.py`**: a dependency-free module with `State` and `Event` enums, the labelling of
-  every state, and the verified transition table. `send(event)` only follows transitions of the
-  model; anything else raises `InvalidTransition`. `allowed_events()` lists the legal next steps,
-  which can be offered to an LLM as the `enum` of a tool parameter, so that it can only choose a
-  verified move. Subclass the machine and add `on_enter_<state>` / `on_exit_<state>` hooks for the
-  LLM calls, tools and human approvals.
-- **Runtime monitors.** Invariants and `G(φ)` properties where φ only looks at the present and the
-  past (`Y Z O H S T`) are compiled into incremental monitors that are checked after every
-  transition (`PropertyViolation` in strict mode). Future-time and CTL properties cannot be decided
-  on a running system; the module lists them as verified by nuXmv only. Tip: state guardrails in
-  past time, e.g. `G (phase = deploying -> Y (phase = release_decision & actor = human))`, so the
-  same formula is both model checked and monitored.
-- **Jupyter notebook** (`.ipynb`): writes the module, shows the machine as a diagram with the
-  current state highlighted (plain SVG, no dependency), a **live widget** (anywidget + Cytoscape.js)
-  that follows every transition, a walk through the model, an illegal event being rejected, the
-  LLM tool-schema pattern, hooks, and replays of the nuXmv counterexamples.
-- **Live link to the editor**: `fsm.link_editor("http://127.0.0.1:3000", channel="demo")` streams
-  each state change of any Python process to the editor. In the **Trace** tab choose *Live from
-  Python* with the same channel: the diagram highlights the current state, the visited states and
-  the possible next states, with a table of events, attribute values and monitor verdicts.
+### Python runtime
+
+`<name>_fsm.py` has no dependency. It contains `State` and `Event` enums, the labelling of every
+state, the verified transition table, and the guards and updates of the transitions.
 
 ```python
 import agentic_coding_loop_fsm as m
 
 fsm = m.AgenticCodingLoopFSM()
-fsm.link_editor(channel="demo")        # optional: follow it in the editor
 fsm.send("USER_SUBMIT")                # or the label as written: fsm.send("user_submit")
-fsm.allowed_events()                   # [PLAN_ACCEPTED, HUMAN_CLARIFIES]
+fsm.allowed_events()                   # [PLAN_ACCEPTED, HUMAN_CLARIFIES]: offer them to the LLM
 fsm.send("HUMAN_APPROVED")             # InvalidTransition: not allowed in state designing
 ```
 
-Command line: `npx nxd python diagram.nxd -o diagram_fsm.py` and
-`npx nxd notebook diagram.nxd --verify` (runs nuXmv first to include verdicts and counterexamples).
+- **Only verified moves.** `send(event)` follows a transition of the model whose guard holds and
+  whose updates stay in range. `on_invalid=` decides what happens otherwise:
+  - `"raise"` (the default) raises `InvalidTransition`;
+  - `"return"` returns a falsy `Rejected`, whose `as_feedback()` text tells an LLM which steps are
+    allowed;
+  - `"escalate:<EVENT>"` fires a verified escalation event instead;
+  - or pass your own handler.
+- **Hooks.** `on_enter_<state>` / `on_exit_<state>` methods are where the LLM calls, tools and
+  human approvals go. `restore(state, variables)` rebuilds a machine from serialised state.
+- **Runtime monitors.** Invariants and `G(φ)` properties where φ only looks at the present and the
+  past (`Y Z O H S T`) are checked after every step (`PropertyViolation` in strict mode). State
+  guardrails in past time, e.g.
+  `G (phase = deploying -> Y (phase = release_decision & actor = human))`, so that the same
+  formula is both model checked and monitored. Future-time properties can use NuRV (below).
+- **Observability.** `fsm.enable_tracing()` emits an OpenTelemetry span per transition and per
+  rejected event (`fsm.state`, `fsm.event`, `fsm.value.*`). `fsm.record_to("run.jsonl")` writes
+  every step to a JSON Lines file.
+
+### Jupyter, live link and conformance
+
+- **Notebook** (`.ipynb`, `nxd notebook diagram.nxd --verify`). It writes the module and shows
+  the machine as a diagram with its current state. It adds a **live widget** (anywidget and
+  Cytoscape.js) that follows every transition, a walk through the model, a rejected illegal event,
+  the LLM tool-schema pattern and hooks, and replays of the nuXmv counterexamples.
+- **Two-way live link.** With `fsm.link_editor("http://127.0.0.1:3000", channel="demo", commands=True)`,
+  the editor's *Trace → Live from Python* view shows the running state, the next possible states
+  and the rejected events. It can send events back: click a highlighted next state or an
+  *▶ EVENT* button, e.g. a person approving a step. Commands still go through `send()`.
+- **Trace conformance.** Use *Trace → Check a recorded run* or `nxd conform diagram.nxd run.jsonl`.
+  It reads JSON Lines from `record_to()`, any log with a `state` field, or OpenTelemetry spans.
+  Every step must follow an enabled transition, with the recorded event and values, and the
+  monitored properties must hold. Problems are listed and the run is replayed on the diagram;
+  the command exits with code 4 when the run deviates.
+
+### Property-based tests, framework exports, full-LTL monitors
+
+- **Property-based tests** (`test_<name>_fsm.py`, `nxd pytest [--verify]`). A Hypothesis
+  `RuleBasedStateMachine` fires random allowed events. Each move must match the verified table,
+  illegal events must be rejected without side effects, and monitors and variable domains must
+  hold. The walk-through and the nuXmv counterexamples are replayed as scenarios. Point `FSM` at
+  your subclass to test your hooks and glue code.
+- **Framework exports** (Python tab → *Export to…*, `nxd export <framework>`):
+
+  | Target | What you get |
+  | --- | --- |
+  | XState v5 | `setup().createMachine()` with guards (including update range checks) and `assign` actions |
+  | LangGraph | a `StateGraph` with a node per state; each node `decide`s the event and the verified machine applies it |
+  | Burr | an action per state and `when(event=...)` transitions |
+  | Temporal | a durable workflow: decisions are activities, human states wait for a signal, only verified moves are taken |
+
+  The Python targets import the generated `<name>_fsm.py`, so the verified table stays the single
+  source of truth. Each is tested by running it in its framework.
+- **NuRV monitors** (Python tab → *NuRV monitors*, `nxd nurv diagram.nxd -o dir`, needs
+  `NURV_PATH` and a C compiler). [NuRV](https://es-static.fbk.eu/tools/nurv/), built on nuXmv,
+  generates monitors for the future-time LTL properties. They monitor *under the model's
+  assumptions*: a verdict becomes true or false as soon as the observed run decides the property
+  for every continuation the model allows. Attach one with `fsm.add_nurv_monitor(module)`.
+  NuRV is free for academic use and licensed separately.
 
 The test suite checks the generated code against nuXmv in both directions. Random walks along the
 verified transitions never trip a monitor of a property nuXmv proved. On a model with a planted
-defect, such as a hotfix path that bypasses the human release decision, the monitors report the
-same properties that nuXmv refutes.
+defect, the monitors report the same properties nuXmv refutes. The editor's simulator, the
+conformance checker and the Python runtime also agree step by step on models with guards and data.
 
-### Related tools
+## Probabilistic analysis
 
-Parts of this exist elsewhere; the combination is what this project adds. Python FSM libraries
-([transitions](https://github.com/pytransitions/transitions) with the Cytoscape-based live
-[transitions-gui](https://github.com/pytransitions/transitions-gui),
-[python-statemachine](https://python-statemachine.readthedocs.io/en/latest/diagram.html))
-draw and enforce machines but do not model check them. Agent frameworks such as
-[LangGraph Studio](https://docs.langchain.com/langsmith/studio), [Burr](https://burr.apache.org/)
-and [Stately](https://stately.ai/docs/inspector) visualise running graphs without temporal-logic
-verification. [Agentproof](https://arxiv.org/abs/2603.20356) checks agent-framework graphs
-statically and at run time against DFA policies, with no editor or model checker.
-[NuRV](https://es-static.fbk.eu/tools/nurv/), built on nuXmv, generates LTL runtime monitors,
-including in Python, with no diagram tooling. It is a natural back end for full-LTL monitors here.
+Give transitions a probability (`prob 0.3` in the text, or in the inspector) and the
+**Properties** tab's *Probabilistic analysis* treats the diagram as a discrete-time Markov chain
+over configurations (state and variables):
+- the probability of eventually reaching a condition, or reaching it within *k* steps;
+- the expected number of steps to reach it;
+- the expected number of visits to another condition on the way, e.g. escalations before a merge.
+
+Transitions without a probability share what is left, and distributions are normalised. *Export
+PRISM model* writes the same chain for [PRISM](https://www.prismmodelchecker.org/) or
+[Storm](https://www.stormchecker.org/), with labels, rewards and a properties file; the built-in
+values match PRISM 4.10.1. Expect the two kinds of analysis to disagree in one systematic way.
+nuXmv says a run *can* avoid a state forever; the Markov chain may still reach it with
+probability 1.
+
+## Importing existing agents
+
+*File → Import agent graph* (`nxd import`) turns an existing graph into a diagram, which you then
+annotate with atoms and properties and verify. It reads:
+- LangGraph's `get_graph().to_json()` and `draw_mermaid()`;
+- Mermaid `flowchart` and `stateDiagram`;
+- XState machine configs;
+- best effort, by pattern matching: LangGraph and CrewAI Flow Python source.
+
+`START` and `END` become initial and final states, and conditional edges become nondeterministic
+choices, so nuXmv checks every branch a router could take.
+
+For how this compares with other tools, see [docs/state-of-the-art.md](docs/state-of-the-art.md).
 
 ## Architecture
 
@@ -280,11 +348,19 @@ packages/
 │   ├── src/serializer.ts               DiagramModel -> .nxd text
 │   ├── src/smv-generator.ts            DiagramModel -> nuXmv model
 │   ├── src/nuxmv-output.ts             nuXmv output -> verdicts + traces
+│   ├── src/semantics.ts                executable semantics: guards, updates, past-time monitors
 │   ├── src/python-generator.ts         DiagramModel -> Python runtime + monitors
+│   ├── src/pytest-generator.ts         DiagramModel -> Hypothesis property-based tests
+│   ├── src/framework-export.ts         DiagramModel -> XState / LangGraph / Burr / Temporal
+│   ├── src/importers.ts                LangGraph / CrewAI / Mermaid / XState -> DiagramModel
+│   ├── src/conformance.ts              recorded runs (JSONL / OpenTelemetry) vs the model
+│   ├── src/probabilistic.ts            Markov chain analysis, PRISM export
+│   ├── src/nurv.ts                     NuRV monitor synthesis plan
 │   ├── src/notebook-generator.ts       DiagramModel -> Jupyter notebook
 │   └── src/legacy-attributes.ts        import of JungToNusmv attributeData.txt
 ├── server/     @nuxmv-editor/server    Node.js + Express
 │   ├── src/nuxmv-runner.ts             spawns nuXmv (BDD / BMC / IC3), timeouts
+│   ├── src/nurv-runner.ts              runs NuRV, fixes and returns the generated monitors
 │   ├── src/app.ts                      REST API, live channel (SSE), serves the built UI
 │   └── src/cli.ts                      `nxd generate|check`
 └── app/        @nuxmv-editor/app       Angular UI
@@ -380,7 +456,7 @@ initial state s0 "idle" { status = ready, request = TRUE } at (120, 100)
 state s1 { status = busy, request = TRUE }       // `at` (the layout) is optional
 state s2 { status = ready }                       // request unset: any value
 
-s0 -> s1 : "request";            // optional transition label (documentation only)
+s0 -> s1 : "request";            // optional transition label (the event name in generated code)
 s1 -> s0;
 s2 -> s0;
 
@@ -393,6 +469,17 @@ INVARSPEC level <= 3;
 - Expressions use nuXmv syntax: `! & | xor xnor -> <->`, `= != < > <= >=`, `+ - * / mod`, LTL
   `G F X U V`, past-time LTL `Y Z O H S T`, CTL `AG AF AX EG EF EX A[p U q] E[p U q]`. The variable `state` holds the name of
   the current state.
+- Data variables are declared with an initial value and changed by transitions, which can also
+  have a guard and a probability:
+
+  ```
+  variables { retries : 0..3 := 0; approved : boolean := FALSE; }
+  test -> work : "tests_failed" when retries < 2 do retries := retries + 1 prob 0.3;
+  review -> done : "approve" do approved := TRUE;
+  ```
+
+  A transition is enabled when its guard holds and its updates stay in range; when nothing is
+  enabled the state stutters. Diagrams with data are encoded with a `TRANS` relation.
 - `--`, `//` and `/* */` comments are accepted.
 - Keywords and temporal operators (`state`, `at`, `G`, `F`, `X`, `U`, `V`, `O`, `H`, `A`, `E`, …) are
   reserved and cannot be used as names.
@@ -436,7 +523,19 @@ NUXMV_PATH=/path/to/nuXmv npx nxd check examples/mutex.nxd --engine bdd
 #   ...
 ```
 
-Exit codes: `0` if every property holds, `3` if a property is false, `1` on errors.
+| Command | What it does |
+| --- | --- |
+| `nxd generate <d.nxd> [-o m.smv]` | write the nuXmv model |
+| `nxd check <d.nxd> [--engine bdd\|bmc\|ic3] [--bound N]` | verify the properties (exit 3 if one is false) |
+| `nxd python <d.nxd> [-o m.py]` | Python implementation with runtime monitors |
+| `nxd notebook <d.nxd> [--verify]` | Jupyter notebook (with verdicts and counterexamples when `--verify`) |
+| `nxd pytest <d.nxd> [--verify]` | Hypothesis property-based tests |
+| `nxd export <xstate\|langgraph\|burr\|temporal> <d.nxd>` | framework code |
+| `nxd import <graph> [-o d.nxd]` | LangGraph / CrewAI / Mermaid / XState graph to a diagram |
+| `nxd conform <d.nxd> <run.jsonl\|otel.json>` | check a recorded run (exit 4 if it deviates) |
+| `nxd prob <d.nxd> --reach EXPR [--within K] [--steps EXPR] [--visits EXPR --until EXPR]` | probabilistic analysis |
+| `nxd prism <d.nxd> [-o m.pm]` | PRISM / Storm model and properties |
+| `nxd nurv <d.nxd> [-o dir]` | NuRV full-LTL monitors (`NURV_PATH`) |
 
 ## REST API
 
@@ -446,6 +545,9 @@ Exit codes: `0` if every property holds, `3` if a property is false, `1` on erro
 | POST   | `/api/verify` | `{ "model": "<smv>" }` or `{ "diagram": "<nxd>" }`, plus `engine` (`bdd`/`bmc`/`ic3`) and `bound` |
 | POST   | `/api/live/<channel>` | a state update `{ state, event?, step?, values?, violations? }` from a running machine |
 | GET    | `/api/live/<channel>/stream` | Server-Sent Events stream of those updates (the last one first) |
+| POST   | `/api/live/<channel>/command` | `{ event }` sent to the running machine (two-way link) |
+| GET    | `/api/live/<channel>/commands` | Server-Sent Events stream of commands, read by `link_editor(..., commands=True)` |
+| POST   | `/api/nurv` | `{ diagram }`: NuRV monitor sources and build commands (needs `NURV_PATH`) |
 
 The response contains the raw `stdout`/`stderr` and the parsed `results` (property, verdict, trace),
 `errors` and `warnings`.
@@ -453,9 +555,15 @@ The response contains the raw `stdout`/`stderr` and the parsed `results` (proper
 ## Tests
 
 ```sh
-npm test                                     # language, server (stand-in nuXmv) and UI unit tests
-NUXMV_PATH=/path/to/nuXmv npm test -w @nuxmv-editor/server   # also runs every example on real nuXmv, with all engines
+npm test      # language, server and UI unit tests
 ```
+
+Optional tools turn on more tests, and CI installs the Python packages:
+- `NUXMV_PATH`: every example is run on real nuXmv with all engines.
+- `NURV_PATH` plus a C compiler: NuRV monitors are generated and run.
+- `PRISM_PATH`: the Markov chain values are compared with PRISM.
+- Python with `opentelemetry-sdk`, `hypothesis`, `pytest`, `langgraph`, `burr` and `temporalio`:
+  the generated code runs with tracing, property-based tests and each framework export.
 
 ## Examples
 
@@ -472,6 +580,7 @@ nondeterministic transitions, so nuXmv checks every possible choice the model co
 | -------------------------------- | ------------------------------------------------------------------------------------ |
 | Writer with tool use             | Tool results always return to the writer, but the LLM can call the tool forever       |
 | Reflection (bounded)             | With the loop counter unrolled, termination is proved                                |
+| Retry budget with data (guards) | The same kind of budget as a bounded variable with guards; transitions carry probabilities |
 | Reflection loop with retry budget | Always terminates, but can end in `failed` after two rejected refinements             |
 | Human-in-the-loop tool approval  | No tool runs without approval; repeated denials can prevent completion               |
 | Orchestration (LLM router)       | The router can prepare the meal before any recipe exists (counterexample)            |

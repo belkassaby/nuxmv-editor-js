@@ -6,7 +6,11 @@ import type { HelpDialog, HelpSection } from './help-dialog';
 export class HelpService {
     dialog?: HelpDialog;
 
-    open(section: HelpSection = 'guide'): void {
-        this.dialog?.open(section);
+    open(section: HelpSection = 'guide', focus: string | null = null): void {
+        this.dialog?.open(section, focus);
+    }
+
+    walkthrough(id: string): void {
+        this.open('walkthroughs', id);
     }
 }

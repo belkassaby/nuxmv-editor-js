@@ -151,11 +151,12 @@ fsm.send(...)   # every transition moves the diagram here</pre>
       <li>Or explore the model by hand:</li>
     </ul>
     <button type="button" class="primary" (click)="store.startSimulation()" [disabled]="store.model().states.length === 0">Start simulation</button>
-    <h4>Check a recorded run</h4>
+    <button type="button" class="link small" (click)="help.walkthrough('simulate')">how?</button>
+    <h4>Check a recorded run <button type="button" class="link small" (click)="help.walkthrough('conformance')">how?</button></h4>
     <p class="muted small">Trace conformance: load a run of the real system (JSON Lines from <code>fsm.record_to(path)</code> or any logger with a <code>state</code> field, or OpenTelemetry JSON) and check every step against the verified model and its monitored properties.</p>
     <button type="button" (click)="importRun()">Check a recorded run…</button>
     @if (importError()) { <p class="error-text">{{ importError() }}</p> }
-    <h4>Live from Python</h4>
+    <h4>Live from Python <button type="button" class="link small" (click)="help.walkthrough('live')">how?</button></h4>
     <p class="muted small">Follow a running implementation of this diagram (Python tab → download the module or notebook, then <code>fsm.link_editor(channel=…)</code>).</p>
     <div class="inline">
       <input #ch class="mono" [value]="live.channel()" aria-label="Channel" spellcheck="false" />

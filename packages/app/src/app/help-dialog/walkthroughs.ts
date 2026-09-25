@@ -1,0 +1,195 @@
+/** Step-by-step guides for the features of the editor, shown in Help → Walkthroughs. */
+
+export interface WalkthroughStep {
+    text: string;
+    /** Optional code or .nxd snippet shown under the step. */
+    code?: string;
+}
+
+export interface Walkthrough {
+    id: string;
+    title: string;
+    /** What you will get out of it, one sentence. */
+    goal: string;
+    /** Example loaded by the "Load the example" button. */
+    example?: string;
+    /** Extra search terms. */
+    keywords?: string;
+    steps: WalkthroughStep[];
+}
+
+export const WALKTHROUGHS: Walkthrough[] = [
+    {
+        id: 'verify',
+        title: 'Verify a design and replay a counterexample',
+        goal: 'Check temporal properties with nuXmv and see, step by step, how a false one fails.',
+        example: 'mutex',
+        steps: [
+            { text: 'Load the example (Mutual exclusion). The text on the left and the diagram in the middle are the same model.' },
+            { text: 'Open the Properties tab: each LTLSPEC, CTLSPEC or INVARSPEC is a property of the design.' },
+            { text: 'Click ▶ Check. Properties that hold get ✓; "liveness" gets ✗.' },
+            { text: 'Click Counterexample next to it. The Trace tab replays the failing run on the diagram: current state in orange, visited states in light orange, the loop that repeats forever drawn dashed.' },
+            { text: 'Use ◀ ▶ or Play to step through it. The table shows every variable at every step; changed values are highlighted.' },
+            { text: 'Fix the design (add a transition, a guard, a fairness constraint) and check again: the results are marked stale as soon as the diagram changes.' }
+        ]
+    },
+    {
+        id: 'data',
+        keywords: 'variables counters guard update when do',
+        title: 'Guards and data variables',
+        goal: 'Model counters and flags (retry budgets, approvals) without drawing one state per value.',
+        example: 'agent-retry-data',
+        steps: [
+            { text: 'Load the example (Retry budget with data). Look at the variables block: retries is a bounded counter, approved a flag.', code: 'variables {\n  retries  : 0..3 := 0;\n  approved : boolean := FALSE;\n}' },
+            { text: 'A transition can have a guard (when), updates (do) and a probability (prob). It is enabled only when the guard holds and the updates stay in range; when nothing is enabled the state stutters.', code: 'test -> work : "tests_failed" when retries < 2 do retries := retries + 1;\nreview -> done : "approve" do approved := TRUE;' },
+            { text: 'Select a transition on the diagram: the inspector has Guard, Updates and Probability fields. The edge label shows [guard] / updates.' },
+            { text: 'Add or edit variables in the Attributes tab, under Data variables (type, domain, initial value).' },
+            { text: 'Check with nuXmv: "budget" (retries <= 2) is proved; "always_merges" fails because a human can reject forever.' },
+            { text: 'nuXmv verifies data models through a TRANS relation: open the nuXmv model tab to see it.' }
+        ]
+    },
+    {
+        id: 'simulate',
+        title: 'Simulate the design by hand',
+        goal: 'Walk through the model and watch attributes and variables change.',
+        example: 'agent-retry-data',
+        steps: [
+            { text: 'Choose nuXmv → Simulate the diagram (or Trace → Start simulation).' },
+            { text: 'The next possible states have a dotted green border: click one to move there, or use Random step.' },
+            { text: 'The table lists every step with the attribute and variable values. With guards, only enabled transitions are offered: after two failed test runs, retrying is no longer possible.' },
+            { text: 'Back undoes a step; Restart goes back to the initial state; Stop ends the simulation.' }
+        ]
+    },
+    {
+        id: 'probabilities',
+        keywords: 'prism storm markov dtmc pctl expected',
+        title: 'Probabilistic analysis',
+        goal: 'Estimate how likely and how fast a goal is reached, given probabilities on the transitions.',
+        example: 'agent-retry-data',
+        steps: [
+            { text: 'Give transitions a probability: prob 0.3 in the text, or the Probability field of the inspector. Transitions of a state without a probability share what is left.' },
+            { text: 'In the Properties tab, scroll to Probabilistic analysis. Queries are suggested from the final states.' },
+            { text: 'Choose a query: P(reach) (optionally within k steps), E[steps until], or E[visits before] (e.g. expected escalations before a merge). Targets are conditions such as phase = done.' },
+            { text: 'Click Compute. For the example: P(reach done) = 1, P(reach done within 6 steps) ≈ 0.68, E[steps] = 6.' },
+            { text: 'Export PRISM model writes the same Markov chain for PRISM or Storm, with a properties file, for full PCTL, rewards and steady-state analysis.' },
+            { text: 'Note: nuXmv says whether something can happen on some run; the Markov chain says how likely it is. A state that a run can avoid forever may still be reached with probability 1.' }
+        ]
+    },
+    {
+        id: 'python',
+        keywords: 'code generation runtime enforcement rejection policy feedback llm tool',
+        title: 'Generate the Python implementation',
+        goal: 'Run the verified design as code that refuses any move the model does not allow.',
+        example: 'agent-coding-loop',
+        steps: [
+            { text: 'Open the Python tab and download <name>_fsm.py (no dependency). The table above the code lists which properties are also monitored at run time.' },
+            { text: 'Drive it with events. Labels work as written; illegal moves raise InvalidTransition.', code: 'import agentic_coding_loop_fsm as m\nfsm = m.AgenticCodingLoopFSM()\nfsm.send("USER_SUBMIT")\nfsm.allowed_events()      # the legal next moves\nfsm.send("HUMAN_APPROVED")  # InvalidTransition' },
+            { text: 'Attach your work to states with hooks: subclass the machine and define on_enter_<state>(self, event, data).', code: 'class Agent(m.AgenticCodingLoopFSM):\n    def on_enter_developing0(self, event, data):\n        ...  # call the coding LLM here' },
+            { text: 'Choose what happens with an illegal event: on_invalid="raise" (default), "return" (a Rejected whose as_feedback() tells an LLM what is allowed), "escalate:<EVENT>" or a handler.', code: 'fsm = m.AgenticCodingLoopFSM(on_invalid="return")\nr = fsm.send("DEPLOY_NOW")\nif not r:\n    prompt += r.as_feedback()' },
+            { text: 'Monitored properties are re-checked after every step; in strict mode a violation raises PropertyViolation.' }
+        ]
+    },
+    {
+        id: 'notebook',
+        keywords: 'jupyter ipynb anywidget colab',
+        title: 'Jupyter notebook with a live diagram',
+        goal: 'Showcase the implementation in a notebook where the diagram follows the running code.',
+        example: 'agent-coding-loop',
+        steps: [
+            { text: 'Check the properties first (▶ Check) so that the notebook includes the verdicts and the counterexamples.' },
+            { text: 'Python tab → Jupyter notebook (or File → Export Jupyter notebook) and open the .ipynb in JupyterLab, VS Code or Colab.' },
+            { text: 'Run all cells: the module is written with %%writefile, the machine is displayed as a diagram (plain SVG), then a live widget (pip install anywidget) follows every transition of the walk-through.' },
+            { text: 'The notebook also shows an illegal event being rejected, how to limit an LLM to the allowed events, hooks, and replays each nuXmv counterexample on the implementation.' }
+        ]
+    },
+    {
+        id: 'live',
+        keywords: 'websocket sse stream remote human approval',
+        title: 'Follow and drive a running process (live link)',
+        goal: 'See, on the diagram, the state a Python process is in, and send it events such as approvals.',
+        example: 'agent-coding-loop',
+        steps: [
+            { text: 'In the Trace tab, pick a channel name and click Live from Python.' },
+            { text: 'In the Python process, link the machine to the same channel. commands=True lets the editor send events back.', code: 'fsm.link_editor("http://127.0.0.1:3000", channel="notebook", commands=True)' },
+            { text: 'Each transition now moves the diagram: current state, visited states and possible next states are highlighted; the table lists events, values, monitor verdicts and rejected events.' },
+            { text: 'Click ▶ EVENT (or a highlighted next state) to send an event to the process. It still goes through send(), so only verified transitions can happen.' },
+            { text: 'Disconnect stops following the process.' }
+        ]
+    },
+    {
+        id: 'conformance',
+        keywords: 'otel opentelemetry jsonl logs replay audit production',
+        title: 'Check a recorded run against the model',
+        goal: 'Find where a real execution deviated from the verified design.',
+        example: 'agent-retry-data',
+        steps: [
+            { text: 'Record runs of the real system: fsm.record_to("run.jsonl") in the generated code, fsm.enable_tracing() for OpenTelemetry, or any JSON Lines log with a "state" field (and optionally "event" and "values").', code: '{"state": "work"}\n{"state": "test", "event": "code_written"}\n{"state": "work", "event": "tests_failed"}' },
+            { text: 'Trace tab → Check a recorded run… and pick the file.' },
+            { text: 'Each step must follow an enabled transition of the model (existing, guard true, right event, same values) and the monitored properties must hold. Problems are listed with their step; click one to jump there on the diagram.' },
+            { text: 'From a terminal: nxd conform diagram.nxd run.jsonl (exit code 4 when the run deviates), e.g. in CI or on production logs.' }
+        ]
+    },
+    {
+        id: 'tests',
+        keywords: 'pytest hypothesis property based',
+        title: 'Property-based tests of your implementation',
+        goal: 'Test your hooks and glue code against the model with Hypothesis.',
+        example: 'agent-retry-data',
+        steps: [
+            { text: 'Python tab → Download tests (with the module). Check first to include the counterexamples as scenarios.' },
+            { text: 'Replace FSM = ... at the top with your subclass, then run pytest.', code: 'pip install pytest hypothesis\npytest test_retry_budget_fsm.py' },
+            { text: 'Hypothesis fires random allowed events and checks that every move follows the verified table, illegal events are rejected without side effects, and monitors and variable domains hold. A failure is shrunk to the shortest run that shows it.' }
+        ]
+    },
+    {
+        id: 'frameworks',
+        keywords: 'xstate stately langgraph burr temporal crewai',
+        title: 'Export to XState, LangGraph, Burr or Temporal',
+        goal: 'Keep your agent framework and give it the verified control flow.',
+        example: 'agent-coding-loop',
+        steps: [
+            { text: 'Python tab → Export to… and choose the framework. The Python targets also need the generated <name>_fsm.py.' },
+            { text: 'XState: a setup().createMachine() with guards and actions; paste it into Stately to visualise it.' },
+            { text: 'LangGraph and Burr: one node / action per state. Provide decide(state, allowed, values), which calls your LLM, tool or human and returns one of the allowed events.', code: 'app = build_graph(decide)\napp.invoke(initial_state())' },
+            { text: 'Temporal: a durable workflow. The decide activity makes the choices; states that look human (review, approval) wait for the human_event signal; only verified moves are taken.' }
+        ]
+    },
+    {
+        id: 'import',
+        keywords: 'langgraph crewai mermaid xstate reverse',
+        title: 'Verify an agent you already have',
+        goal: 'Turn an existing LangGraph, CrewAI, Mermaid or XState graph into a diagram and check it.',
+        steps: [
+            { text: 'Get the graph: in LangGraph, app.get_graph().to_json() or app.get_graph().draw_mermaid(); or use the Python source of a LangGraph builder or a CrewAI Flow; or an XState machine; or any Mermaid flowchart / stateDiagram.' },
+            { text: 'File → Import agent graph… and pick the file. START and END become initial and final states; conditional edges become choices nuXmv explores.' },
+            { text: 'Label the states with atoms (Attributes tab), write the properties you expect (Properties tab), and check. The imported diagram now documents and verifies the agent.' },
+            { text: 'Reading Python source is best effort: compare the diagram with the code.' }
+        ]
+    },
+    {
+        id: 'nurv',
+        keywords: 'ltl monitor runtime verification fbk',
+        title: 'Full-LTL runtime monitors with NuRV',
+        goal: 'Monitor at run time the properties about the future too, with verdicts that use the model.',
+        example: 'agent-coding-loop',
+        steps: [
+            { text: 'Start the server with NURV_PATH pointing to NuRV (free for academic use, from es-static.fbk.eu/tools/nurv). The Python tab then shows a NuRV monitors button.' },
+            { text: 'Download the monitors (one .py and .c per future-time LTL property) and build them next to the module.', code: 'cc -fPIC -shared -o libnurv_always_goes_live.so nurv_always_goes_live.c' },
+            { text: 'Attach them to the machine. A verdict stays "unknown" until the run decides the property for every continuation the model allows, then becomes "true" or "false".', code: 'import nurv_always_goes_live\nstatus = fsm.add_nurv_monitor(nurv_always_goes_live)\nstatus["verdict"]   # unknown / true / false' },
+            { text: 'From a terminal: NURV_PATH=... nxd nurv diagram.nxd -o monitors/ generates and compiles them.' }
+        ]
+    },
+    {
+        id: 'layout',
+        keywords: 'svg png spread radial zoom maximize resize',
+        title: 'Lay out, resize and export the diagram',
+        goal: 'Make large diagrams readable and publish them.',
+        example: 'agent-coding-loop',
+        steps: [
+            { text: 'Pick a layout in the diagram toolbar: Vertical / Horizontal (layered), Spread (fewest crossing transitions), Radial (hub in the centre), Force, Circle, Grid. ↻ applies it again; positions are saved in the text.' },
+            { text: 'Drag the dividers around the diagram to resize the panels (double-click resets); ⤢ gives the diagram the whole window, Esc restores.' },
+            { text: 'Zoom with the wheel or + / − (down to 2%), Fit shows everything.' },
+            { text: 'PNG or SVG export the current drawing, including a replayed trace.' }
+        ]
+    }
+];

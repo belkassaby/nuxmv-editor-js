@@ -2,6 +2,7 @@ import { Component, computed, inject, signal } from '@angular/core';
 import { attributeDomain, type AttributeDef, type AttributeType } from '@nuxmv-editor/language';
 import { DiagramStore } from '../diagram-store';
 import { pickFile } from '../file-io';
+import { HelpService } from '../help-dialog/help.service';
 
 /**
  * Dynamic attribute table: one row per atom, one column per state. This is
@@ -14,6 +15,7 @@ import { pickFile } from '../file-io';
 })
 export class AttributeTable {
     readonly store = inject(DiagramStore);
+    readonly help = inject(HelpService);
     readonly error = signal<string | null>(null);
     readonly rows = computed(() => this.store.model().attributes.map(a => ({ attribute: a, domain: attributeDomain(a.type) })));
 

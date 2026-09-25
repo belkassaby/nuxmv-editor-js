@@ -64,7 +64,7 @@
   </div>
 }
 
-<h4>Data variables</h4>
+<h4 class="with-help">Data variables <button type="button" class="link small" (click)="help.walkthrough('data')">how?</button></h4>
 <p class="muted small">Counters and flags changed by transitions (<code>do retries := retries + 1</code>) and tested by guards (<code>when retries &lt; 2</code>). Unlike attributes, their value is not fixed by the state.</p>
 @if (store.model().variables.length > 0) {
   <table class="grid">
