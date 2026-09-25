@@ -3,6 +3,10 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { parseArgs } from 'node:util';
 import { analyse, checkConformance, exportPrism, exportToFramework, importGraph, serializeDiagram, type ProbabilisticQuery, FRAMEWORKS, generateNotebook, generatePython, generatePythonTests, generateSmv, matchResults, parseDiagram, parseTrace, type Framework } from '@nuxmv-editor/language';
 import { configFromEnv, ENGINES, runNuxmv, type Engine } from './nuxmv-runner.js';
+import { nurvExecutable, runNurv } from './nurv-runner.js';
+import { spawnSync } from 'node:child_process';
+import { mkdir } from 'node:fs/promises';
+import { join } from 'node:path';
 
 const USAGE = `Usage:
   nxd generate <diagram.nxd> [-o model.smv]      write the nuXmv model
@@ -22,6 +26,8 @@ const USAGE = `Usage:
                                                  probabilistic analysis of the diagram as a Markov chain
   nxd prism <diagram.nxd> [-o model.pm] [--reach EXPR ...]
                                                  export the Markov chain to PRISM / Storm (model + .pctl)
+  nxd nurv <diagram.nxd> [-o dir]               generate full-LTL Python monitors with NuRV (NURV_PATH)
+                                                 and compile them with cc when available
   nxd conform <diagram.nxd> <run.jsonl|otel.json>
                                                  check a recorded run against the model (exit 4 if it deviates)`;
 
@@ -135,6 +141,22 @@ async function main(): Promise<number> {
         const { dtmc, results } = await analyse(parsed.model, queries);
         console.log(`${dtmc.configurations.length} configuration(s)${dtmc.normalised ? ' (some probabilities filled in or normalised)' : ''}`);
         for (const r of results) console.log(r.description);
+        return 0;
+    }
+    if (command === 'nurv') {
+        const executable = nurvExecutable();
+        if (!executable) throw new Error('Set NURV_PATH to the NuRV executable (https://es-static.fbk.eu/tools/nurv/).');
+        const result = await runNurv(parsed.model, executable);
+        const dir = values.output ?? '.';
+        await mkdir(dir, { recursive: true });
+        for (const [name, content] of Object.entries(result.files)) await writeFile(join(dir, name), content, 'utf8');
+        for (const cmd of result.build) {
+            const [cc, ...args] = cmd.split(' ');
+            const r = spawnSync(cc, args, { cwd: dir, stdio: 'inherit' });
+            console.log(r.status === 0 ? `built: ${cmd}` : `could not run '${cmd}' (build it yourself in ${dir})`);
+        }
+        for (const m of result.monitors) console.log(`monitor ${m.module}: LTLSPEC ${m.name} := ${m.expression}   ->   fsm.add_nurv_monitor(${m.module})`);
+        if (result.monitors.length === 0) console.log(result.log);
         return 0;
     }
     if (command === 'conform') {

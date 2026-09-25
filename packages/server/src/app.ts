@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import express, { type NextFunction, type Request, type Response } from 'express';
 import { generateSmv, GenerationError, parseDiagram } from '@nuxmv-editor/language';
 import { ENGINES, nuxmvInfo, runNuxmv, type Engine, type RunnerConfig } from './nuxmv-runner.js';
+import { nurvAvailable, runNurv } from './nurv-runner.js';
 
 export interface AppOptions {
     runner: RunnerConfig;
@@ -10,6 +11,8 @@ export interface AppOptions {
     staticDir?: string;
     /** Maximum number of nuXmv processes running at the same time. */
     maxConcurrentRuns?: number;
+    /** NuRV executable for full-LTL monitor generation (optional). */
+    nurv?: string;
 }
 
 class HttpError extends Error {
@@ -31,7 +34,23 @@ export function createApp(options: AppOptions): express.Express {
     const maxRuns = options.maxConcurrentRuns ?? 2;
 
     app.get('/api/health', async (_req, res) => {
-        res.json({ ok: true, nuxmv: await nuxmvInfo(options.runner) });
+        res.json({ ok: true, nuxmv: await nuxmvInfo(options.runner), nurv: { available: nurvAvailable(options.nurv) } });
+    });
+
+    /** POST /api/nurv { diagram }: NuRV-generated full-LTL monitors (sources + build commands). */
+    app.post('/api/nurv', async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const executable = options.nurv;
+            if (!executable || !nurvAvailable(executable)) throw new HttpError(503, 'NuRV is not configured: set NURV_PATH to the NuRV executable (https://es-static.fbk.eu/tools/nurv/).');
+            const body = (req.body ?? {}) as { diagram?: unknown };
+            if (typeof body.diagram !== 'string') throw new HttpError(400, "Provide 'diagram' (.nxd text).");
+            const parsed = await parseDiagram(body.diagram);
+            if (parsed.hasErrors) throw new HttpError(422, 'The diagram has errors.', parsed.diagnostics.filter(d => d.severity === 'error'));
+            const result = await runNurv(parsed.model, executable);
+            res.json({ files: result.files, monitors: result.monitors, build: result.build });
+        } catch (error) {
+            next(error);
+        }
     });
 
     /**

@@ -3,6 +3,7 @@ import type { Server } from 'node:http';
 import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { EXAMPLES, generatePython, generateSmv, matchResults, parseDiagram } from '@nuxmv-editor/language';
+import { runNurv } from '../src/nurv-runner.js';
 import { spawn, spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -201,4 +202,37 @@ describe.skipIf(!real)('real nuXmv', () => {
         expect(fair[0]?.verdict).toBe('true');
         expect(withoutFairness[0]?.verdict).toBe('false');
     });
+});
+
+// Runs only when NuRV is available, e.g. NURV_PATH=/opt/NuRV/NuRV npm test
+const nurv = process.env['NURV_PATH'];
+const py = ['python3', 'python'].find(cmd => spawnSync(cmd, ['--version']).status === 0);
+const cc = spawnSync('cc', ['--version']).status === 0;
+describe.skipIf(!nurv || !py || !cc)('NuRV monitors', () => {
+    it('generates full-LTL monitors that decide under the model assumptions', async () => {
+        const source = EXAMPLES.find(e => e.id === 'agent-chat')!.source + '\nLTLSPEC NAME closes := F turn = closed;\nLTLSPEC NAME replies := G (turn = assistant -> F turn = user);\n';
+        const { model } = await parseDiagram(source);
+        const result = await runNurv(model, nurv!);
+        expect(result.monitors.map(m => m.name)).toEqual(['closes', 'replies']);
+        const dir = mkdtempSync(join(tmpdir(), 'nxd-nurv-'));
+        for (const [name, content] of Object.entries(result.files)) writeFileSync(join(dir, name), content);
+        for (const cmd of result.build) {
+            const [bin, ...args] = cmd.split(' ');
+            expect(spawnSync(bin, args, { cwd: dir }).status).toBe(0);
+        }
+        const gen = await generatePython(model);
+        writeFileSync(join(dir, `${gen.moduleName}.py`), gen.code);
+        const out = spawnSync(py!, ['-c', `
+import ${gen.moduleName} as m, nurv_closes, nurv_replies
+fsm = m.${gen.className}(strict=False)
+closes, replies = fsm.add_nurv_monitor(nurv_closes), fsm.add_nurv_monitor(nurv_replies)
+print(closes["verdict"], replies["verdict"])
+for e in ["USER_MESSAGE", "TOOL_CALL", "APPROVE", "TOOL_RESPONSE", "REPLY"]:
+    fsm.send(e)
+print(closes["verdict"], replies["verdict"], fsm.state.value)
+`], { cwd: dir, encoding: 'utf8' });
+        // 'closed' is unreachable: false right away. Replies are not guaranteed by the model
+        // (the assistant may keep calling tools), so that monitor stays undecided.
+        expect(out.stdout.trim().split('\n')).toEqual(['false unknown', 'false unknown idle']);
+    }, 120_000);
 });

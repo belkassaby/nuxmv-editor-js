@@ -26,6 +26,8 @@ export interface NuxmvStatus {
     available: boolean;
     version?: string;
     error?: string;
+    /** NuRV configured on the server (full-LTL monitor generation). */
+    nurv?: boolean;
 }
 
 /** Talks to the Node backend, which runs nuXmv on the generated model. */
@@ -40,8 +42,8 @@ export class NuxmvApi {
         try {
             const res = await fetch('api/health');
             if (!res.ok) throw new Error(`Backend answered ${res.status}`);
-            const body = (await res.json()) as { nuxmv: { available: boolean; version?: string; error?: string } };
-            this.status.set({ checked: true, ...body.nuxmv });
+            const body = (await res.json()) as { nuxmv: { available: boolean; version?: string; error?: string }; nurv?: { available: boolean } };
+            this.status.set({ checked: true, ...body.nuxmv, nurv: body.nurv?.available ?? false });
         } catch (error) {
             this.status.set({ checked: true, available: false, error: `Backend not reachable (${(error as Error).message}). Start it with "npm start".` });
         }

@@ -1,6 +1,7 @@
 import { Component, computed, inject, input, signal } from '@angular/core';
 import { FRAMEWORKS, type Framework } from '@nuxmv-editor/language';
 import { CodeExport } from '../code-export';
+import { NuxmvApi } from '../nuxmv-api';
 import { DiagramStore } from '../diagram-store';
 import { downloadText } from '../file-io';
 
@@ -13,6 +14,7 @@ export class OutputPanel {
     readonly store = inject(DiagramStore);
     readonly view = input<'model' | 'python' | 'console'>('model');
     readonly code = inject(CodeExport);
+    readonly api = inject(NuxmvApi);
     readonly showBanner = signal(false);
     readonly frameworks = FRAMEWORKS;
 

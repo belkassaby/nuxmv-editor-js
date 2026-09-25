@@ -11,6 +11,7 @@ export * from './pytest-generator.js';
 export * from './framework-export.js';
 export * from './importers.js';
 export * from './probabilistic.js';
+export * from './nurv.js';
 export * from './semantics.js';
 export * from './conformance.js';
 export { astToModel } from './ast-to-model.js';
