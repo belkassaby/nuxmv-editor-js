@@ -1,0 +1,9 @@
+stateDiagram-v2
+    [*] --> Idle
+    state "Waiting for approval" as Approval
+    Idle --> Working : start
+    Working --> Approval : needs_tool
+    Approval --> Working : approve
+    Approval --> Idle : deny
+    Working --> Done : finish
+    Done --> [*]

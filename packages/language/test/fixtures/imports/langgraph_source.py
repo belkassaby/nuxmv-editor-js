@@ -1,0 +1,8 @@
+builder = StateGraph(State)
+builder.add_node("agent", call_model)
+builder.add_node("tools", tool_node)
+builder.add_node("human", ask_human)
+builder.add_edge(START, "agent")
+builder.add_conditional_edges("agent", route, {"call_tool": "tools", "ask": "human", "finish": END})
+builder.add_edge("tools", "agent")
+builder.add_edge("human", "agent")

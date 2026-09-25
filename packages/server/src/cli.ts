@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { readFile, writeFile } from 'node:fs/promises';
 import { parseArgs } from 'node:util';
-import { checkConformance, exportToFramework, FRAMEWORKS, generateNotebook, generatePython, generatePythonTests, generateSmv, matchResults, parseDiagram, parseTrace, type Framework } from '@nuxmv-editor/language';
+import { checkConformance, exportToFramework, importGraph, serializeDiagram, FRAMEWORKS, generateNotebook, generatePython, generatePythonTests, generateSmv, matchResults, parseDiagram, parseTrace, type Framework } from '@nuxmv-editor/language';
 import { configFromEnv, ENGINES, runNuxmv, type Engine } from './nuxmv-runner.js';
 
 const USAGE = `Usage:
@@ -16,6 +16,8 @@ const USAGE = `Usage:
                                                  write Hypothesis property-based tests for the Python module
   nxd export <xstate|langgraph|burr|temporal> <diagram.nxd> [-o file]
                                                  export the verified machine to an agent/workflow framework
+  nxd import <graph> [-o diagram.nxd]            import a LangGraph (JSON, Mermaid, source), CrewAI Flow,
+                                                 Mermaid or XState graph as a diagram
   nxd conform <diagram.nxd> <run.jsonl|otel.json>
                                                  check a recorded run against the model (exit 4 if it deviates)`;
 
@@ -39,6 +41,14 @@ async function main(): Promise<number> {
         return values.help ? 0 : 2;
     }
 
+    if (command === 'import') {
+        const result = importGraph(await readFile(file, 'utf8'));
+        result.notes.forEach(n => console.error(`note: ${n}`));
+        const nxd = serializeDiagram(result.model);
+        if (values.output) await writeFile(values.output, nxd, 'utf8');
+        else process.stdout.write(nxd);
+        return 0;
+    }
     const parsed = await parseDiagram(await readFile(file, 'utf8'));
     for (const d of parsed.diagnostics) {
         if (d.severity === 'error' || d.severity === 'warning') console.error(`${file}:${d.line}:${d.column}: ${d.severity}: ${d.message}`);

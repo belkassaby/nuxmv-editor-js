@@ -1,5 +1,5 @@
 import { Component, computed, effect, HostListener, inject, OnInit, signal, viewChild } from '@angular/core';
-import { EXAMPLES } from '@nuxmv-editor/language';
+import { EXAMPLES, importGraph, serializeDiagram } from '@nuxmv-editor/language';
 import { AttributeTable } from './attribute-table/attribute-table';
 import { CodeExport } from './code-export';
 import { DiagramCanvas } from './diagram-canvas/diagram-canvas';
@@ -156,6 +156,20 @@ export class App implements OnInit {
         if (!this.confirmDiscard()) return;
         const file = await pickFile('.nxd,.txt');
         if (file) this.store.load(file.text, file.name);
+    }
+
+    /** Imports an existing LangGraph / CrewAI / Mermaid / XState graph as a new diagram. */
+    async importAgentGraph(): Promise<void> {
+        if (!this.confirmDiscard()) return;
+        const file = await pickFile('.json,.mmd,.mermaid,.md,.py,.ts,.js,.txt');
+        if (!file) return;
+        try {
+            const result = importGraph(file.text);
+            this.store.load(serializeDiagram(result.model), file.name.replace(/\.[^.]+$/, '') + '.nxd');
+            this.flash(`Imported ${file.name} (${result.format})${result.notes.length ? `: ${result.notes[0]}` : ''}`);
+        } catch (error) {
+            this.flash(`Could not import ${file.name}: ${(error as Error).message}`);
+        }
     }
 
     save(): void {
