@@ -77,6 +77,7 @@ describe('REST API (fake nuXmv)', () => {
         expect(stream.headers.get('content-type')).toContain('text/event-stream');
         const reader = stream.body!.getReader();
         const received: string[] = [];
+        const statuses: string[] = [];
         const read = (async () => {
             const decoder = new TextDecoder();
             let buffer = '';
@@ -84,7 +85,13 @@ describe('REST API (fake nuXmv)', () => {
                 const { value, done } = await reader.read();
                 if (done) break;
                 buffer += decoder.decode(value);
-                for (const m of buffer.matchAll(/^data: (.*)$/gm)) if (!received.includes(m[1])) received.push(m[1]);
+                // Unnamed messages are state updates; 'status' events report the machines listening.
+                for (const block of buffer.split('\n\n')) {
+                    const data = /^data: (.*)$/m.exec(block)?.[1];
+                    if (!data) continue;
+                    if (/^event: status$/m.test(block)) statuses.includes(data) || statuses.push(data);
+                    else if (!received.includes(data)) received.push(data);
+                }
             }
         })();
         await new Promise(r => setTimeout(r, 50));
@@ -94,6 +101,9 @@ describe('REST API (fake nuXmv)', () => {
         // The last update is replayed to a new subscriber, then new ones follow.
         expect(received.map(r => JSON.parse(r).state)).toEqual(['s0', 's1']);
         expect(JSON.parse(received[1]).event).toBe('GO');
+        expect(JSON.parse(received[0]).replayed).toBe(true); // sent before we subscribed
+        expect(JSON.parse(received[1]).replayed).toBeUndefined();
+        expect(statuses.map(x => JSON.parse(x).machines)).toEqual([0]); // no machine listens for commands
     });
 
     it('validates live channels and updates', async () => {
@@ -127,7 +137,7 @@ time.sleep(8)
                     const { value, done } = await reader.read().catch(() => ({ value: undefined, done: true }));
                     if (done) return;
                     buffer += decoder.decode(value);
-                    updates.splice(0, updates.length, ...[...buffer.matchAll(/^data: (.*)$/gm)].map(m => JSON.parse(m[1])));
+                    updates.splice(0, updates.length, ...[...buffer.matchAll(/^data: (.*)$/gm)].map(m => JSON.parse(m[1])).filter(u => 'state' in u));
                 }
             })();
             const waitFor = async (pred: () => boolean) => {

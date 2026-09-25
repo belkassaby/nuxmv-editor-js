@@ -106,6 +106,12 @@ export function createApp(options: AppOptions): express.Express {
         return c;
     };
 
+    /** Tells the editors of a channel how many machines listen for commands (0: none is running). */
+    const broadcastStatus = (c: { clients: Set<Response>; commandClients: Set<Response> }) => {
+        const status = JSON.stringify({ machines: c.commandClients.size });
+        for (const client of c.clients) client.write(`event: status\ndata: ${status}\n\n`);
+    };
+
     app.post('/api/live/:channel', (req: Request, res: Response, next: NextFunction) => {
         try {
             const c = channel(String(req.params['channel']));
@@ -146,10 +152,12 @@ export function createApp(options: AppOptions): express.Express {
         res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache', connection: 'keep-alive' });
         res.write(': connected\n\n');
         c.commandClients.add(res);
+        broadcastStatus(c);
         const keepAlive = setInterval(() => res.write(': keep-alive\n\n'), 25_000);
         req.on('close', () => {
             clearInterval(keepAlive);
             c.commandClients.delete(res);
+            broadcastStatus(c);
         });
     });
 
@@ -163,7 +171,9 @@ export function createApp(options: AppOptions): express.Express {
         }
         res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache', connection: 'keep-alive' });
         res.write(': connected\n\n');
-        if (c.last) res.write(`data: ${c.last}\n\n`);
+        // The last update of the channel, marked as replayed: it may come from a process that has ended.
+        if (c.last) res.write(`data: ${JSON.stringify({ ...JSON.parse(c.last), replayed: true })}\n\n`);
+        res.write(`event: status\ndata: ${JSON.stringify({ machines: c.commandClients.size })}\n\n`);
         c.clients.add(res);
         const keepAlive = setInterval(() => res.write(': keep-alive\n\n'), 25_000);
         req.on('close', () => {

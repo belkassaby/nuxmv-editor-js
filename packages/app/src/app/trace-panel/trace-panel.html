@@ -3,21 +3,30 @@
     <strong>Live from Python</strong>
     <span class="badge" [class.ok]="live.connected()" [class.fail]="!live.connected()">{{ live.connected() ? 'connected' : 'connecting…' }}</span>
     <span class="mono small">channel {{ live.channel() }}</span>
+    @if (live.machines() !== null) {
+      <span class="badge" [class.ok]="live.machines()! > 0" [title]="live.machines()! > 0 ? 'A Python process linked with commands=True is running' : 'No Python process listens on this channel'">
+        {{ live.machines()! > 0 ? 'machine running' : 'no machine running' }}
+      </span>
+    }
     <span class="spacer"></span>
     <span class="muted small">{{ live.updates().length }} update(s)</span>
     <button type="button" (click)="close()">Disconnect</button>
   </div>
   @if (live.warning()) { <p class="warning-text">{{ live.warning() }}</p> }
+  @if (liveRows()[0]?.replayed && !live.machines()) {
+    <p class="warning-text">This is the last state sent on channel <code>{{ live.channel() }}</code>, by a process that is no longer running. Start one (below) or pick a new channel name.</p>
+  }
   @if (liveRows()[0]?.allowed?.length) {
     <div class="panel-bar">
       <span class="muted small">Send to the running machine:</span>
       @for (e of liveRows()[0].allowed; track e) {
-        <button type="button" (click)="live.send(e)" [title]="'Fire ' + e + ' in the Python process'">▶ {{ e }}</button>
+        <button type="button" (click)="live.send(e)" [disabled]="!live.machines()"
+          [title]="live.machines() ? 'Fire ' + e + ' in the Python process' : 'No Python process is listening: run the live demo script, or link_editor(..., commands=True)'">▶ {{ e }}</button>
       }
       @if (live.commandStatus()) { <span class="muted small">{{ live.commandStatus() }}</span> }
     </div>
   }
-  @if (live.updates().length === 0) {
+  @if (live.updates().length === 0 || (!live.machines() && liveRows()[0]?.replayed)) {
     <div class="pad">
       <p><strong>Listening, but no Python process is sending states yet.</strong> The diagram moves when a Python program that runs this machine links to channel <code>{{ live.channel() }}</code>:</p>
       <ol>

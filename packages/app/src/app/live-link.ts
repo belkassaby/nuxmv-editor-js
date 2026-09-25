@@ -13,6 +13,8 @@ export interface LiveUpdate {
     /** Set when the machine rejected an event (the state did not change). */
     rejected?: { event: string; reason: string };
     receivedAt?: number;
+    /** Replayed on connection: the last update sent on the channel, possibly by an ended process. */
+    replayed?: boolean;
 }
 
 /**
@@ -26,6 +28,8 @@ export class LiveLink {
     readonly connected = signal(false);
     readonly updates = signal<LiveUpdate[]>([]);
     readonly warning = signal<string | null>(null);
+    /** Machines listening for commands on the channel (null until the server says). */
+    readonly machines = signal<number | null>(null);
     private source?: EventSource;
 
     connect(channel: string): void {
@@ -43,12 +47,18 @@ export class LiveLink {
         source.onopen = () => this.connected.set(true);
         source.onerror = () => this.connected.set(false);
         source.onmessage = message => this.receive(JSON.parse(message.data) as LiveUpdate);
+        source.addEventListener('status', event => {
+            this.machines.set((JSON.parse((event as MessageEvent).data) as { machines: number }).machines);
+            if (this.machines()) this.commandStatus.set(null);
+        });
     }
 
     disconnect(): void {
         this.source?.close();
         this.source = undefined;
         this.connected.set(false);
+        this.machines.set(null);
+        this.commandStatus.set(null);
         if (this.store.live()) this.store.stopHighlight();
     }
 
@@ -64,7 +74,9 @@ export class LiveLink {
             });
             const body = (await res.json()) as { listeners?: number; error?: string };
             if (!res.ok) throw new Error(body.error ?? `HTTP ${res.status}`);
-            this.commandStatus.set(body.listeners ? `Sent ${event}.` : `Sent ${event}, but no machine is listening: link it with link_editor(..., commands=True).`);
+            this.commandStatus.set(
+                body.listeners ? `Sent ${event}.` : `Nothing received ${event}: no Python process is linked to this channel with commands=True (it may have ended). Run the live demo script or your own program.`
+            );
         } catch (error) {
             this.commandStatus.set(`Could not send ${event}: ${(error as Error).message}`);
         }
