@@ -2,7 +2,11 @@ import type { AddressInfo } from 'node:net';
 import type { Server } from 'node:http';
 import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { EXAMPLES, generateSmv, matchResults, parseDiagram } from '@nuxmv-editor/language';
+import { EXAMPLES, generatePython, generateSmv, matchResults, parseDiagram } from '@nuxmv-editor/language';
+import { spawn, spawnSync } from 'node:child_process';
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { createApp } from '../src/app.js';
 import { nuxmvInfo, runNuxmv, type RunnerConfig } from '../src/nuxmv-runner.js';
 
@@ -97,6 +101,57 @@ describe('REST API (fake nuXmv)', () => {
         expect((await post('/api/live/bad%20name', { state: 's0' })).status).toBe(400);
         expect((await post('/api/live/ok', { nostate: true })).status).toBe(400);
     });
+
+    const python = ['python3', 'python'].find(cmd => spawnSync(cmd, ['--version']).status === 0);
+    it.skipIf(!python)('two-way live link: the editor drives a running Python machine', async () => {
+        const { model } = await parseDiagram(EXAMPLES.find(e => e.id === 'agent-tool-approval')!.source);
+        const py = await generatePython(model);
+        const dir = mkdtempSync(join(tmpdir(), 'nxd-live-'));
+        writeFileSync(join(dir, `${py.moduleName}.py`), py.code);
+        const proc = spawn(python!, ['-c', `
+import time, ${py.moduleName} as m
+fsm = m.${py.className}(on_invalid="return")
+fsm.link_editor("${url}", channel="twoway", commands=True)
+time.sleep(8)
+`], { cwd: dir });
+        try {
+            const controller = new AbortController();
+            const stream = await fetch(`${url}/api/live/twoway/stream`, { signal: controller.signal });
+            const reader = stream.body!.getReader();
+            const updates: Array<{ state: string; rejected?: unknown }> = [];
+            const decoder = new TextDecoder();
+            let buffer = '';
+            void (async () => {
+                for (;;) {
+                    const { value, done } = await reader.read().catch(() => ({ value: undefined, done: true }));
+                    if (done) return;
+                    buffer += decoder.decode(value);
+                    updates.splice(0, updates.length, ...[...buffer.matchAll(/^data: (.*)$/gm)].map(m => JSON.parse(m[1])));
+                }
+            })();
+            const waitFor = async (pred: () => boolean) => {
+                for (let i = 0; i < 100 && !pred(); i++) await new Promise(r => setTimeout(r, 100));
+                return pred();
+            };
+            expect(await waitFor(() => updates.some(u => u.state === 'writing'))).toBe(true);
+            const command = async (event: string) => {
+                // The machine may still be connecting its command stream: retry until it listens.
+                for (let i = 0; i < 40; i++) {
+                    const res = await fetch(`${url}/api/live/twoway/command`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ event }) });
+                    if ((await res.json()).listeners > 0) return;
+                    await new Promise(r => setTimeout(r, 100));
+                }
+                throw new Error('no listener');
+            };
+            await command('TOOL_CALL');
+            expect(await waitFor(() => updates.some(u => u.state === 'approval_required'))).toBe(true);
+            await command('ANSWER'); // not allowed in approval_required: rejected by the machine
+            expect(await waitFor(() => updates.some(u => u.rejected))).toBe(true);
+            controller.abort();
+        } finally {
+            proc.kill();
+        }
+    }, 20_000);
 
     it('reports a missing executable', async () => {
         const info = await nuxmvInfo({ executable: '/nonexistent/nuXmv', timeoutMs: 1000, maxOutputBytes: 1000 });

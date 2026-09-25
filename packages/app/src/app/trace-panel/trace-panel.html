@@ -8,11 +8,20 @@
     <button type="button" (click)="close()">Disconnect</button>
   </div>
   @if (live.warning()) { <p class="warning-text">{{ live.warning() }}</p> }
+  @if (liveRows()[0]?.allowed?.length) {
+    <div class="panel-bar">
+      <span class="muted small">Send to the running machine:</span>
+      @for (e of liveRows()[0].allowed; track e) {
+        <button type="button" (click)="live.send(e)" [title]="'Fire ' + e + ' in the Python process'">▶ {{ e }}</button>
+      }
+      @if (live.commandStatus()) { <span class="muted small">{{ live.commandStatus() }}</span> }
+    </div>
+  }
   @if (live.updates().length === 0) {
     <div class="pad">
       <p>Waiting for the running state machine. In Python (the generated module or notebook):</p>
       <pre class="code small">fsm = {{ code.python()?.moduleName ?? 'module' }}.{{ code.python()?.className ?? 'FSM' }}()
-fsm.link_editor("{{ origin }}", channel="{{ live.channel() }}")
+fsm.link_editor("{{ origin }}", channel="{{ live.channel() }}", commands=True)
 fsm.send(...)   # every transition moves the diagram here</pre>
     </div>
   } @else {
@@ -23,10 +32,10 @@ fsm.send(...)   # every transition moves the diagram here</pre>
           @for (u of liveRows(); track $index) {
             <tr [class.current-row]="$first">
               <td>{{ u.step }}</td>
-              <td class="mono">{{ u.event ?? '(start)' }}</td>
+              <td class="mono">@if (u.rejected) { <span class="badge fail">rejected</span> {{ u.rejected.event }} } @else { {{ u.event ?? '(start)' }} }</td>
               <td class="mono">{{ u.state }}</td>
               <td class="mono small">@for (kv of (u.values ?? {}) | keyvalue; track kv.key) { {{ kv.key }}={{ kv.value }}&nbsp; }</td>
-              <td>@if (u.violations?.length) { <span class="badge fail">{{ u.violations?.join(', ') }}</span> } @else { <span class="badge ok">ok</span> }</td>
+              <td>@if (u.rejected) { <span class="small">{{ u.rejected.reason }}</span> } @else if (u.violations?.length) { <span class="badge fail">{{ u.violations?.join(', ') }}</span> } @else { <span class="badge ok">ok</span> }</td>
             </tr>
           }
         </tbody>

@@ -18,6 +18,24 @@ class PropertyViolation(Exception):
     """Raised (in strict mode) when a runtime monitor detects a violated property."""
 
 
+class Rejected:
+    """Result of send() under on_invalid="return": falsy, with feedback for the caller (e.g. an LLM)."""
+
+    def __init__(self, event, state, reason, allowed):
+        self.event, self.state, self.reason, self.allowed = event, state, reason, allowed
+
+    def __bool__(self):
+        return False
+
+    def as_feedback(self):
+        """A message to hand back to an LLM so it can pick a legal step."""
+        choices = ", ".join(self.allowed) if self.allowed else "none (the process is waiting)"
+        return "The step %s is not allowed now (current state: %s): %s. Choose one of: %s." % (self.event, self.state, self.reason, choices)
+
+    def __repr__(self):
+        return "<Rejected %s in %s: %s>" % (self.event, self.state, self.reason)
+
+
 class _Monitor:
     """Incremental monitor of G(phi) where phi only looks at the present and the past."""
 
@@ -253,6 +271,53 @@ class EditorLink:
 
         threading.Thread(target=post, daemon=True).start()
 
+    def rejected(self, fsm, rejected):
+        """Report a rejected event to the editor (shown in the live table)."""
+        import json
+        import threading
+        import urllib.request
+
+        payload = {"diagram": DIAGRAM["name"], "state": fsm.state.value, "step": len(fsm.history),
+                   "rejected": {"event": rejected.event, "reason": rejected.reason},
+                   "allowed": list(rejected.allowed)}
+
+        def post():
+            try:
+                req = urllib.request.Request(self.endpoint, data=json.dumps(payload).encode(),
+                                             headers={"content-type": "application/json"}, method="POST")
+                urllib.request.urlopen(req, timeout=self.timeout).read()
+            except Exception:
+                pass
+
+        threading.Thread(target=post, daemon=True).start()
+
+    def listen(self, fsm):
+        """Apply the events sent from the editor (GET /api/live/<channel>/commands, Server-Sent Events)."""
+        import json
+        import threading
+        import time
+        import urllib.request
+
+        def run():
+            while True:
+                try:
+                    with urllib.request.urlopen(self.endpoint + "/commands", timeout=None) as stream:
+                        for raw in stream:
+                            line = raw.decode("utf-8").strip()
+                            if not line.startswith("data:"):
+                                continue
+                            command = json.loads(line[5:])
+                            try:
+                                fsm.send(command["event"], values=command.get("values"))
+                            except Exception as exc:  # the policy decides; never kill the listener
+                                print("EditorLink: command %s rejected: %s" % (command.get("event"), exc))
+                except Exception:
+                    time.sleep(2)  # editor not reachable yet: retry
+
+        thread = threading.Thread(target=run, daemon=True)
+        thread.start()
+        return thread
+
 
 class StateMachine:
     """Event-driven runtime of a verified diagram.
@@ -264,7 +329,11 @@ class StateMachine:
     * Runtime monitors re-check the monitorable properties on every step.
     """
 
-    def __init__(self, initial=None, *, strict=True, listeners=()):
+    def __init__(self, initial=None, *, strict=True, listeners=(), on_invalid="raise"):
+        """on_invalid: what send() does with an event the model does not allow now:
+        "raise" (InvalidTransition), "return" (a falsy Rejected with feedback for an LLM),
+        "escalate:<EVENT>" (fire that verified escalation event instead), or a callable
+        handler(fsm, rejected) whose result send() returns."""
         start = State(initial) if initial is not None else INITIAL_STATES[0]
         if start not in INITIAL_STATES:
             raise InvalidTransition("%s is not an initial state (initial: %s)" % (start.value, ", ".join(s.value for s in INITIAL_STATES)))
@@ -275,6 +344,10 @@ class StateMachine:
         self.free_values = {}
         self.variables = dict(VARIABLES)
         self._listeners = list(listeners)
+        self._rejection_listeners = []
+        self.on_invalid = on_invalid
+        self.rejections = []
+        self._lock = __import__("threading").RLock()
         self.monitors = [_Monitor(*m) for m in MONITOR_SPECS]
         self._check_monitors(record=None)
         self._notify(None)
@@ -321,15 +394,48 @@ class StateMachine:
 
     # -- transitions ---------------------------------------------------------
     def send(self, event, values=None, **data):
-        """Fire an event. values: attributes left free (any) in the target state."""
-        event = _to_event(event)
-        key = (self.state, event)
-        if key not in TRANSITIONS:
-            raise InvalidTransition("%s is not allowed in state %s (allowed: %s)" % (
-                event.value, self.state.value, ", ".join(e.value for e in self.allowed_events()) or "none"))
-        why = self._blocked(key)
-        if why is not None:
-            raise InvalidTransition("%s is not enabled in state %s: %s" % (event.value, self.state.value, why))
+        """Fire an event. values: attributes left free (any) in the target state.
+
+        Thread safe. Events the model does not allow now go to the on_invalid policy."""
+        with self._lock:
+            try:
+                ev = _to_event(event)
+            except InvalidTransition as exc:
+                return self._reject(event, str(exc))
+            key = (self.state, ev)
+            if key not in TRANSITIONS:
+                return self._reject(ev, "%s is not allowed in state %s (allowed: %s)" % (
+                    ev.value, self.state.value, ", ".join(e.value for e in self.allowed_events()) or "none"))
+            why = self._blocked(key)
+            if why is not None:
+                return self._reject(ev, "%s is not enabled in state %s: %s" % (ev.value, self.state.value, why))
+            return self._fire(key, ev, values, data)
+
+    def _reject(self, event, reason):
+        rejected = Rejected(getattr(event, "value", str(event)), self.state.value, reason, [e.value for e in self.allowed_events()])
+        self.rejections.append(rejected)
+        for listener in list(self._rejection_listeners):
+            listener(self, rejected)
+        policy = self.on_invalid
+        if policy == "raise":
+            raise InvalidTransition(reason)
+        if policy == "return":
+            return rejected
+        if isinstance(policy, str) and policy.startswith("escalate:"):
+            escalation = policy.split(":", 1)[1]
+            if self.can(escalation):
+                return self.send(escalation)
+            raise InvalidTransition("%s; the escalation event %s is not allowed either" % (reason, escalation))
+        if callable(policy):
+            return policy(self, rejected)
+        raise ValueError("unknown on_invalid policy %r" % (policy,))
+
+    def on_rejected(self, listener):
+        """listener(fsm, rejected) is called for every rejected event, before the policy applies."""
+        self._rejection_listeners.append(listener)
+        return listener
+
+    def _fire(self, key, event, values, data):
         source, target = self.state, TRANSITIONS[key]
         update = UPDATES.get(key)
         if update is not None:
@@ -404,12 +510,56 @@ class StateMachine:
         write(self, None)
         return write
 
-    def link_editor(self, url="http://127.0.0.1:3000", channel="default"):
-        """Stream state changes to a running nuxmv-editor."""
+    def link_editor(self, url="http://127.0.0.1:3000", channel="default", commands=False):
+        """Stream state changes to a running nuxmv-editor. With commands=True the editor can also
+        send events back (e.g. a human approving a step); they go through send(), so only verified
+        transitions can happen."""
         link = EditorLink(url, channel)
         self.subscribe(link)
+        self.on_rejected(link.rejected)
         link(self, None)
+        if commands:
+            link.listen(self)
         return link
+
+    def enable_tracing(self, tracer=None):
+        """Emit an OpenTelemetry span per transition ("fsm.transition") and per rejected event
+        ("fsm.rejected"), with fsm.* attributes; recorded spans can be checked against the model
+        in the editor (Trace -> Check a recorded run). Needs opentelemetry-api."""
+        try:
+            from opentelemetry import trace
+            from opentelemetry.trace import Status, StatusCode
+        except ImportError as exc:  # pragma: no cover - depends on the environment
+            raise ImportError("Tracing needs OpenTelemetry: pip install opentelemetry-api opentelemetry-sdk") from exc
+        tracer = tracer or trace.get_tracer("nuxmv-editor-js." + DIAGRAM["name"])
+
+        def attributes(fsm, record=None):
+            a = {"fsm.machine": DIAGRAM["name"], "fsm.state": fsm.state.value, "fsm.step": len(fsm.history)}
+            if record:
+                a["fsm.event"] = record["event"]
+                a["fsm.source"] = record["source"]
+            for k, v in fsm.values.items():
+                if k != "state" and isinstance(v, (bool, int, float, str)):
+                    a["fsm.value." + k] = v
+            violated = [m.name for m in fsm.monitors if m.violated_at is not None]
+            if violated:
+                a["fsm.violations"] = violated
+            return a
+
+        def on_step(fsm, record=None):
+            with tracer.start_as_current_span("fsm.transition" if record else "fsm.start", attributes=attributes(fsm, record)):
+                pass
+
+        def on_rejected(fsm, rejected):
+            a = attributes(fsm)
+            a.update({"fsm.rejected": True, "fsm.event": rejected.event, "fsm.reason": rejected.reason})
+            with tracer.start_as_current_span("fsm.rejected", attributes=a) as span:
+                span.set_status(Status(StatusCode.ERROR, rejected.reason))
+
+        self.subscribe(on_step)
+        self.on_rejected(on_rejected)
+        on_step(self, None)
+        return tracer
 
     def _repr_svg_(self):
         return _svg(DIAGRAM, self.state.value, [s.value for s in self.visited])

@@ -79,11 +79,11 @@ export function createApp(options: AppOptions): express.Express {
     // Live link: a running Python state machine (EditorLink) posts each state
     // change; editors subscribed to the same channel receive it over SSE.
     // ------------------------------------------------------------------
-    const channels = new Map<string, { clients: Set<Response>; last?: string }>();
+    const channels = new Map<string, { clients: Set<Response>; commandClients: Set<Response>; last?: string }>();
     const channel = (name: string) => {
         if (!/^[\w-]{1,64}$/.test(name)) throw new HttpError(400, 'Channel names are 1-64 letters, digits, _ or -.');
         let c = channels.get(name);
-        if (!c) channels.set(name, (c = { clients: new Set() }));
+        if (!c) channels.set(name, (c = { clients: new Set(), commandClients: new Set() }));
         return c;
     };
 
@@ -99,6 +99,39 @@ export function createApp(options: AppOptions): express.Express {
         } catch (error) {
             next(error);
         }
+    });
+
+    // Two-way link: the editor sends events to the running machine (it applies them with send(),
+    // so only transitions of the verified model can happen).
+    app.post('/api/live/:channel/command', (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const c = channel(String(req.params['channel']));
+            const body = (req.body ?? {}) as Record<string, unknown>;
+            if (typeof body['event'] !== 'string' || !/^[\w :()-]{1,128}$/.test(body['event'])) throw new HttpError(400, "'event' (string) is required.");
+            const command = JSON.stringify({ event: body['event'], ...(body['values'] && typeof body['values'] === 'object' ? { values: body['values'] } : {}), sentAt: Date.now() });
+            for (const client of c.commandClients) client.write(`data: ${command}\n\n`);
+            res.json({ ok: true, listeners: c.commandClients.size });
+        } catch (error) {
+            next(error);
+        }
+    });
+
+    app.get('/api/live/:channel/commands', (req: Request, res: Response, next: NextFunction) => {
+        let c;
+        try {
+            c = channel(String(req.params['channel']));
+        } catch (error) {
+            next(error);
+            return;
+        }
+        res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache', connection: 'keep-alive' });
+        res.write(': connected\n\n');
+        c.commandClients.add(res);
+        const keepAlive = setInterval(() => res.write(': keep-alive\n\n'), 25_000);
+        req.on('close', () => {
+            clearInterval(keepAlive);
+            c.commandClients.delete(res);
+        });
     });
 
     app.get('/api/live/:channel/stream', (req: Request, res: Response, next: NextFunction) => {

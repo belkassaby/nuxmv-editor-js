@@ -3,7 +3,7 @@ import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { EXAMPLES, generateNotebook, generatePython, parseDiagram, Semantics } from '../src/index.js';
+import { checkConformance, EXAMPLES, generateNotebook, generatePython, parseDiagram, parseTrace, Semantics } from '../src/index.js';
 
 const python = ['python3', 'python'].find(cmd => spawnSync(cmd, ['--version']).status === 0);
 
@@ -121,6 +121,59 @@ except m.PropertyViolation as e:
         expect(out).toContain("'human_decides_release'");
         expect(out).toContain("'deploys_the_merged_change'");
         expect(out).toContain('strict: True');
+    });
+
+    it('applies the rejection policies', async () => {
+        const { py } = await generate('agent-coding-loop');
+        writeFileSync(join(dir, `${py.moduleName}.py`), py.code);
+        const out = run(`
+import ${py.moduleName} as m
+C = m.${py.className}
+r = C(on_invalid="return").send("HUMAN_APPROVED")
+print("return:", bool(r), r.state, r.allowed)
+print("feedback:", r.as_feedback())
+f = C(on_invalid="escalate:USER_SUBMIT"); f.send("DEPLOY_NOW")
+print("escalate:", f.state.value, [x.event for x in f.rejections])
+seen = []
+g = C(on_invalid=lambda fsm, rej: seen.append(rej.event) or "handled")
+print("callable:", g.send("nonsense"), seen, g.state.value)
+try:
+    C().send("HUMAN_APPROVED"); print("raise: no")
+except m.InvalidTransition:
+    print("raise: yes")
+`);
+        expect(out).toContain("return: False prompting ['USER_SUBMIT']");
+        expect(out).toContain('feedback: The step HUMAN_APPROVED is not allowed now (current state: prompting)');
+        expect(out).toContain("Choose one of: USER_SUBMIT.");
+        expect(out).toContain("escalate: designing ['DEPLOY_NOW']");
+        expect(out).toContain("callable: handled ['nonsense'] prompting");
+        expect(out).toContain('raise: yes');
+    });
+
+    const otel = spawnSync(python!, ['-c', 'import opentelemetry.sdk']).status === 0;
+    it.skipIf(!otel)('emits OpenTelemetry spans that conform to the model', async () => {
+        const { model, py } = await generate('agent-retry-data');
+        writeFileSync(join(dir, `${py.moduleName}.py`), py.code);
+        const out = run(`
+import json, random, ${py.moduleName} as m
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
+exporter = InMemorySpanExporter()
+provider = TracerProvider(); provider.add_span_processor(SimpleSpanProcessor(exporter))
+fsm = m.${py.className}(on_invalid="return")
+fsm.enable_tracing(provider.get_tracer("test"))
+rng = random.Random(4)
+for _ in range(40):
+    fsm.send(rng.choice(list(m.Event)))   # includes illegal events: rejected spans
+print(json.dumps([json.loads(s.to_json()) for s in exporter.get_finished_spans()]))
+`);
+        const spans = JSON.parse(out);
+        expect(spans.some((sp: { name: string }) => sp.name === 'fsm.rejected')).toBe(true);
+        const records = parseTrace(JSON.stringify(spans));
+        const report = await checkConformance(model, records);
+        expect(records.length).toBeGreaterThan(3);
+        expect(report.issues).toEqual([]);
     });
 
     it('past-time operators follow their semantics step by step', async () => {

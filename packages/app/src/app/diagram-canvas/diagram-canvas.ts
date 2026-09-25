@@ -3,6 +3,7 @@ import cytoscape, { type Core, type EdgeSingular, type ElementDefinition, type E
 import edgehandles from 'cytoscape-edgehandles';
 import type { DiagramModel } from '@nuxmv-editor/language';
 import { DiagramStore, type Highlight, type Selection } from '../diagram-store';
+import { LiveLink } from '../live-link';
 import { downloadText } from '../file-io';
 import { computeLayout, LAYOUTS, type LayoutKind } from './layouts';
 import { cytoscapeToSvg } from './svg-export';
@@ -24,6 +25,7 @@ export type CanvasMode = 'select' | 'add-state' | 'add-transition';
 })
 export class DiagramCanvas implements OnDestroy {
     readonly store = inject(DiagramStore);
+    private readonly live = inject(LiveLink);
     private readonly host = viewChild.required<ElementRef<HTMLElement>>('cy');
     readonly mode = signal<CanvasMode>('select');
     readonly tooltip = signal<{ x: number; y: number; lines: string[] } | null>(null);
@@ -116,7 +118,10 @@ export class DiagramCanvas implements OnDestroy {
         });
         cy.on('tap', 'node', event => {
             const name = (event.target as NodeSingular).id();
-            if (this.store.simulation()) this.store.simulateTo(name);
+            if (this.store.live()) {
+                const event = this.live.eventTo(name);
+                if (event) void this.live.send(event);
+            } else if (this.store.simulation()) this.store.simulateTo(name);
             else this.store.selection.set({ kind: 'state', name });
         });
         cy.on('tap', 'edge', event => {

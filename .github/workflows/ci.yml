@@ -14,6 +14,11 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      # Optional Python packages exercised by the generated-code tests (tracing, property-based tests).
+      - run: pip install opentelemetry-sdk hypothesis pytest
       - run: npm ci
       - run: npm run build
       # The server tests use a stand-in for nuXmv; set NUXMV_PATH to run them against the real tool.

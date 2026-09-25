@@ -218,7 +218,7 @@ export async function generatePython(model: DiagramModel, options: { sourceName?
     lines.push('');
     lines.push('__all__ = [');
     lines.push(`    ${py(className)}, "State", "Event", "TRANSITIONS", "LABELS", "INITIAL_STATES", "TERMINAL_STATES",`);
-    lines.push('    "InvalidTransition", "PropertyViolation", "EditorLink",');
+    lines.push('    "InvalidTransition", "PropertyViolation", "Rejected", "EditorLink",');
     lines.push(']');
     lines.push('');
 

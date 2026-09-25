@@ -218,7 +218,7 @@ function otelSpans(parsed: unknown): TraceRecord[] | null {
     else collect(parsed);
     const steps = spans
         .map(span => ({ span, attrs: attributesOf(span['attributes']) }))
-        .filter(({ attrs }) => typeof attrs['fsm.state'] === 'string');
+        .filter(({ attrs }) => typeof attrs['fsm.state'] === 'string' && attrs['fsm.rejected'] !== true);
     if (steps.length === 0) return null;
     steps.sort((a, b) => Number(a.attrs['fsm.step'] ?? 0) - Number(b.attrs['fsm.step'] ?? 0) || String(startOf(a.span)).localeCompare(String(startOf(b.span))));
     return steps.map(({ attrs, span }) => {
