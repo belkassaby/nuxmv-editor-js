@@ -1,0 +1,166 @@
+<dialog #dialog class="help code-import" (click)="$event.target === dialog && close()" aria-label="Import code base">
+  <header>
+    <h2>Import code base</h2>
+    @if (report(); as r) {
+      <span class="muted small code-root" title="Analysed folder">{{ r.root }}</span>
+    }
+    <button type="button" class="link small" (click)="walkthrough()">how does it work?</button>
+    <button type="button" class="icon" (click)="close()" aria-label="Close">×</button>
+  </header>
+
+  @if (codeImport.running()) {
+    <div class="help-body">
+      <p class="code-progress"><span class="spinner" aria-hidden="true"></span> {{ codeImport.progress() }}</p>
+      <p class="muted small">Extracting the state machines, resource lifecycles, design-pattern contracts and layers, then checking every model. Large projects take a little while.</p>
+    </div>
+  } @else if (!report()) {
+    <div class="help-body">
+      <p>
+        ProvenFlow reads a TypeScript/JavaScript, Angular or Python project, builds models of it and checks them with nuXmv
+        (<code>pflow extract</code>). Each problem comes with the code path that shows it and a fix; every model opens here as a diagram.
+      </p>
+      <section class="code-source">
+        <h3>A folder on this computer</h3>
+        <p class="muted small">The source files (and <code>package.json</code>, <code>provenflow.config.json</code>) are uploaded to the ProvenFlow server and deleted after the analysis; <code>node_modules</code> are not, so types from libraries (e.g. Angular signals) are only partly known.</p>
+        <input #folder type="file" webkitdirectory multiple hidden (change)="analyseFolder(folder.files); folder.value = ''" />
+        <button type="button" class="primary" (click)="folder.click()">Choose folder…</button>
+      </section>
+      <section class="code-source">
+        <h3>A folder path on the server</h3>
+        @if (codeImport.pathsAllowed()) {
+          <p class="muted small">Read in place on the machine running the ProvenFlow server, with its <code>node_modules</code>: the most precise option when the server runs locally.</p>
+          <div class="code-path">
+            <input class="mono" type="text" placeholder="/Users/me/projects/my-app" [value]="path()" (input)="path.set($any($event.target).value)" (keydown.enter)="analysePath()" aria-label="Folder path" spellcheck="false" />
+            <button type="button" class="primary" (click)="analysePath()" [disabled]="!path().trim()">Analyse</button>
+          </div>
+        } @else {
+          <p class="muted small">Not available: this server is not running on this machine (or PROVENFLOW_EXTRACT_PATHS=0). From a terminal: <code>npx pflow extract &lt;folder&gt;</code>.</p>
+        }
+      </section>
+      @if (codeImport.error(); as e) { <p class="error-text">{{ e }}</p> }
+    </div>
+  } @else {
+    @let r = report()!;
+    <div class="code-summary">
+      <span>{{ r.files }} files · {{ r.models.length }} models · {{ properties() }} properties checked with {{ r.checkedWith === 'nuxmv' ? 'nuXmv' : 'the explicit-state checker' }}</span>
+      <span class="badge fail">{{ r.summary.error }} errors</span>
+      <span class="badge warn">{{ r.summary.warning }} warnings</span>
+      <span class="badge">{{ r.summary.info }} notes</span>
+      <span class="spacer"></span>
+      <button type="button" (click)="downloadReport()">Download report (.md)</button>
+      <button type="button" (click)="codeImport.clear()">New analysis</button>
+    </div>
+    <nav class="help-tabs code-tabs" role="tablist">
+      <button type="button" role="tab" [class.active]="view() === 'findings'" (click)="view.set('findings')">Findings</button>
+      <button type="button" role="tab" [class.active]="view() === 'models'" (click)="view.set('models')">Models ({{ r.models.length }})</button>
+      <button type="button" role="tab" [class.active]="view() === 'patterns'" (click)="view.set('patterns')">Patterns ({{ r.patterns.length }})</button>
+      <button type="button" role="tab" [class.active]="view() === 'paradigm'" (click)="view.set('paradigm')">Paradigm</button>
+    </nav>
+    <div class="help-body">
+      @switch (view()) {
+        @case ('findings') {
+          <div class="code-filters">
+            <label><input type="checkbox" [checked]="shown().has('error')" (change)="toggle('error')" /> errors</label>
+            <label><input type="checkbox" [checked]="shown().has('warning')" (change)="toggle('warning')" /> warnings</label>
+            <label><input type="checkbox" [checked]="shown().has('info')" (change)="toggle('info')" /> notes</label>
+          </div>
+          @for (g of groups(); track g.category) {
+            <h3>{{ g.label }} ({{ g.findings.length }})</h3>
+            <ul class="code-findings">
+              @for (f of g.findings; track $index) {
+                <li class="code-finding" [class]="f.severity">
+                  <div class="code-finding-head">
+                    <span class="badge" [class.fail]="f.severity === 'error'" [class.warn]="f.severity === 'warning'">{{ f.severity }}</span>
+                    <strong>{{ f.rule }}</strong>
+                    <span class="muted">{{ f.subject }}</span>
+                    @if (f.loc) { <code class="small">{{ where(f.loc) }}</code> }
+                    <span class="spacer"></span>
+                    @if (modelOf(f.model); as m) {
+                      <button type="button" class="small" (click)="show(m, true)" [title]="f.source === 'nuxmv' ? 'Open the model and check it: the counterexample replays on the diagram' : 'Open the model'">Open model</button>
+                    }
+                  </div>
+                  <p>{{ f.message }}</p>
+                  @if (f.counterexample && f.counterexample.length > 1) {
+                    <ol class="code-trace small">
+                      @for (step of f.counterexample; track $index) {
+                        <li>
+                          @if (step.event) { <span class="mono">{{ step.event }}</span> → }
+                          <strong>{{ step.state }}</strong>
+                          @if (step.loc) { <span class="muted"> ({{ where(step.loc) }})</span> }
+                        </li>
+                      }
+                    </ol>
+                  }
+                  <p class="code-fix"><strong>Fix:</strong> {{ f.fix }}</p>
+                </li>
+              }
+            </ul>
+          } @empty {
+            <p class="ok-text">✓ No findings at the selected levels.</p>
+          }
+          @if (r.notes.length > 0) {
+            <h3>Notes</h3>
+            <ul class="small muted">
+              @for (n of r.notes; track $index) { <li>{{ n }}</li> }
+            </ul>
+          }
+        }
+        @case ('models') {
+          <table class="code-table">
+            <thead><tr><th>model</th><th>kind</th><th>states</th><th>properties</th><th></th></tr></thead>
+            <tbody>
+              @for (m of r.models; track m.id) {
+                <tr>
+                  <td>{{ m.subject }} @if (m.loc) { <br /><code class="small muted">{{ where(m.loc) }}</code> }</td>
+                  <td>{{ m.kind }}</td>
+                  <td>{{ m.states }} / {{ m.transitions }}</td>
+                  <td>
+                    @if (m.failed.length > 0) { <span class="badge fail">{{ m.failed.length }} false</span> } @else { <span class="badge ok">{{ m.properties }} hold</span> }
+                  </td>
+                  <td><button type="button" class="small" (click)="show(m)">Open</button></td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        }
+        @case ('patterns') {
+          <table class="code-table">
+            <thead><tr><th>pattern</th><th>subject</th><th>evidence</th><th></th></tr></thead>
+            <tbody>
+              @for (p of r.patterns; track $index) {
+                <tr>
+                  <td>{{ p.pattern }}</td>
+                  <td>{{ p.subject }}<br /><code class="small muted">{{ where(p.loc) }}</code></td>
+                  <td class="small">{{ p.evidence }}</td>
+                  <td>@if (modelOf(p.model); as m) { <button type="button" class="small" (click)="show(m)">Contract</button> }</td>
+                </tr>
+              } @empty {
+                <tr><td colspan="4" class="muted">No design pattern recognised.</td></tr>
+              }
+            </tbody>
+          </table>
+        }
+        @case ('paradigm') {
+          <table class="code-table">
+            <thead><tr><th>part</th><th>declared</th><th>detected</th><th>files</th><th>classes / methods</th><th>free / pure functions</th><th>mutations per 100 lines</th><th>mutable globals</th></tr></thead>
+            <tbody>
+              @for (p of r.paradigm; track p.part) {
+                <tr>
+                  <td>{{ p.part }}</td><td>{{ p.declared ?? '—' }}</td><td>{{ p.detected }}</td><td>{{ p.files }}</td>
+                  <td>{{ p.classes }} / {{ p.methods }}</td><td>{{ p.freeFunctions }} / {{ p.pureFunctions }}</td><td>{{ p.mutationDensity }}</td><td>{{ p.mutableGlobals }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+          @if (r.architecture.edges.length > 0) {
+            <h3>Dependencies</h3>
+            <ul class="small">
+              @for (e of r.architecture.edges; track $index) { <li>{{ e.from }} → {{ e.to }}: {{ e.count }} import(s){{ e.typeOnly ? ' (types only)' : '' }}</li> }
+            </ul>
+          }
+          <p class="muted small">Declare layers, their allowed imports and their style (functional or object-oriented) in provenflow.config.json at the root of the project to have them checked.</p>
+        }
+      }
+    </div>
+  }
+</dialog>

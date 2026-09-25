@@ -1,6 +1,9 @@
 import { existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { mkdir, mkdtemp, rm, stat, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { dirname, isAbsolute, join, normalize } from 'node:path';
 import express, { type NextFunction, type Request, type Response } from 'express';
+import { extractProject, webReport, type ProvenflowConfig } from '@provenflow/extract';
 import { generateSmv, GenerationError, parseDiagram } from '@provenflow/language';
 import { ENGINES, nuxmvInfo, runNuxmv, type Engine, type RunnerConfig } from './nuxmv-runner.js';
 import { nurvAvailable, runNurv } from './nurv-runner.js';
@@ -13,7 +16,15 @@ export interface AppOptions {
     maxConcurrentRuns?: number;
     /** NuRV executable for full-LTL monitor generation (optional). */
     nurv?: string;
+    /**
+     * Allow POST /api/extract to analyse a folder of this machine by path. Only for servers bound to
+     * loopback: anyone who can reach the API can then read the source files of any folder.
+     */
+    allowLocalPaths?: boolean;
 }
+
+/** Limits of an uploaded code base. */
+const MAX_UPLOAD_FILES = 5000;
 
 class HttpError extends Error {
     constructor(
@@ -28,13 +39,15 @@ class HttpError extends Error {
 export function createApp(options: AppOptions): express.Express {
     const app = express();
     app.disable('x-powered-by');
-    app.use(express.json({ limit: '2mb' }));
+    // Code bases are uploaded to /api/extract, which takes larger bodies.
+    const json = express.json({ limit: '2mb' });
+    app.use((req, res, next) => (req.path === '/api/extract' ? next() : json(req, res, next)));
 
     let running = 0;
     const maxRuns = options.maxConcurrentRuns ?? 2;
 
     app.get('/api/health', async (_req, res) => {
-        res.json({ ok: true, nuxmv: await nuxmvInfo(options.runner), nurv: { available: nurvAvailable(options.nurv) } });
+        res.json({ ok: true, nuxmv: await nuxmvInfo(options.runner), nurv: { available: nurvAvailable(options.nurv) }, extract: { paths: !!options.allowLocalPaths } });
     });
 
     /** POST /api/nurv { diagram }: NuRV-generated full-LTL monitors (sources + build commands). */
@@ -50,6 +63,58 @@ export function createApp(options: AppOptions): express.Express {
             res.json({ files: result.files, monitors: result.monitors, build: result.build });
         } catch (error) {
             next(error);
+        }
+    });
+
+    /**
+     * POST /api/extract: models of a code base, verified (pflow extract).
+     *   { path: "/abs/folder" }                   a folder on this machine (allowLocalPaths), or
+     *   { files: { "src/a.ts": "...", ... } }     uploaded sources (and provenflow.config.json, package.json)
+     *   config?: provenflow.config.json contents (default: the one in the folder)
+     */
+    app.post('/api/extract', express.json({ limit: '64mb' }), async (req: Request, res: Response, next: NextFunction) => {
+        let temp: string | undefined;
+        try {
+            const body = (req.body ?? {}) as { path?: unknown; files?: unknown; config?: unknown };
+            let root: string;
+            if (typeof body.path === 'string') {
+                if (!options.allowLocalPaths) throw new HttpError(403, 'This server does not read folders by path (it is not bound to localhost): upload the folder instead.');
+                if (!isAbsolute(body.path)) throw new HttpError(400, "'path' must be an absolute folder path.");
+                const info = await stat(body.path).catch(() => undefined);
+                if (!info?.isDirectory()) throw new HttpError(404, `No folder at ${body.path}.`);
+                root = body.path;
+            } else if (body.files && typeof body.files === 'object' && !Array.isArray(body.files)) {
+                const entries = Object.entries(body.files as Record<string, unknown>);
+                if (entries.length === 0) throw new HttpError(400, 'No files uploaded.');
+                if (entries.length > MAX_UPLOAD_FILES) throw new HttpError(413, `At most ${MAX_UPLOAD_FILES} files.`);
+                temp = await mkdtemp(join(tmpdir(), 'provenflow-extract-'));
+                for (const [path, text] of entries) {
+                    const safe = normalize(path).replace(/\\/g, '/');
+                    if (typeof text !== 'string' || isAbsolute(safe) || safe.startsWith('..') || safe.includes('\0')) throw new HttpError(400, `Invalid file ${path}.`);
+                    await mkdir(dirname(join(temp, safe)), { recursive: true });
+                    await writeFile(join(temp, safe), text, 'utf8');
+                }
+                root = temp;
+            } else {
+                throw new HttpError(400, "Provide 'path' (a folder on the server) or 'files' (uploaded sources).");
+            }
+            if (body.config !== undefined && (typeof body.config !== 'object' || body.config === null)) throw new HttpError(400, "'config' must be an object.");
+            if (running >= maxRuns) throw new HttpError(429, 'Too many runs in progress, try again shortly.');
+            running++;
+            try {
+                const available = (await nuxmvInfo(options.runner)).available;
+                const result = await extractProject(root, {
+                    config: body.config as ProvenflowConfig | undefined,
+                    checker: available ? smv => runNuxmv(smv, { engine: 'bdd' }, options.runner) : undefined
+                });
+                res.json({ ...(webReport(result) as object), root: temp ? '(uploaded folder)' : root });
+            } finally {
+                running--;
+            }
+        } catch (error) {
+            next(error);
+        } finally {
+            if (temp) await rm(temp, { recursive: true, force: true });
         }
     });
 

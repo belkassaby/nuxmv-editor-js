@@ -5,6 +5,7 @@ import { CodeExport } from './code-export';
 import { DiagramCanvas } from './diagram-canvas/diagram-canvas';
 import { DiagramStore } from './diagram-store';
 import { downloadText, pickFile } from './file-io';
+import { CodeImportDialog } from './code-import/code-import-dialog';
 import { HelpDialog, type HelpSection } from './help-dialog/help-dialog';
 import { Inspector } from './inspector/inspector';
 import { NuxmvApi } from './nuxmv-api';
@@ -32,7 +33,7 @@ function loadSizes(): typeof DEFAULT_SIZES {
 
 @Component({
     selector: 'app-root',
-    imports: [AttributeTable, DiagramCanvas, HelpDialog, Inspector, OutputPanel, ProblemsList, PropertiesPanel, Splitter, TextEditor, TracePanel],
+    imports: [AttributeTable, CodeImportDialog, DiagramCanvas, HelpDialog, Inspector, OutputPanel, ProblemsList, PropertiesPanel, Splitter, TextEditor, TracePanel],
     templateUrl: './app.html',
     styleUrl: './app.css'
 })
@@ -54,6 +55,7 @@ export class App implements OnInit {
     private readonly editor = viewChild(TextEditor);
     private readonly canvas = viewChild(DiagramCanvas);
     private readonly help = viewChild.required(HelpDialog);
+    private readonly codeImport = viewChild.required(CodeImportDialog);
 
     readonly tabs = computed(() => {
         const v = this.store.verification();
@@ -157,6 +159,20 @@ export class App implements OnInit {
         // .nxd is the extension used before ProvenFlow: still opened, saved as .pflow.
         const file = await pickFile('.pflow,.nxd,.txt');
         if (file) this.store.load(file.text, file.name.replace(/\.nxd$/, '.pflow'));
+    }
+
+    /** File → Import code base…: extracts and verifies models of a project (pflow extract). */
+    importCodeBase(): void {
+        this.codeImport().open();
+    }
+
+    /** Opens a model extracted from a code base; checks it when it has false properties. */
+    async openCodeModel(event: { text: string; name: string; check: boolean }): Promise<void> {
+        if (!this.confirmDiscard()) return;
+        this.store.load(event.text, event.name);
+        await this.store.settled();
+        if (event.check && this.api.status().available) await this.check();
+        else this.flash(`Opened ${event.name}: the comments at the top list the code behind each transition.`);
     }
 
     /** Imports an existing LangGraph / CrewAI / Mermaid / XState graph as a new diagram. */

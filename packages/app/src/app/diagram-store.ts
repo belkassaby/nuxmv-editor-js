@@ -157,6 +157,11 @@ export class DiagramStore {
         this.parseTimer = setTimeout(() => void this.flushParse(), origin === 'editor' ? 250 : 0);
     }
 
+    /** Resolves once the current text is parsed and the model follows it. */
+    settled(): Promise<void> {
+        return this.flushParse();
+    }
+
     /** Parses the latest typed text now, if it has not been parsed yet. */
     private flushParse(): Promise<void> {
         clearTimeout(this.parseTimer);

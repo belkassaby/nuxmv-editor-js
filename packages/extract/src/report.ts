@@ -150,6 +150,27 @@ function sourceLabel(source: Finding['source']): string {
     return source === 'nuxmv' ? 'proved by nuXmv' : source === 'graph' ? 'found on the model graph' : source === 'llm' ? 'LLM' : 'static analysis';
 }
 
+/** Everything the editor shows for an imported code base, including the .pflow text of every model. */
+export function webReport(result: ExtractionResult): unknown {
+    const models = result.models.map(m => `models/${m.id}.pflow`);
+    return {
+        ...(jsonReport(result) as object),
+        models: result.models.map(m => ({
+            id: m.id,
+            kind: m.kind,
+            subject: m.subject,
+            loc: m.loc,
+            states: m.model.states.length,
+            transitions: m.model.transitions.length,
+            properties: result.verdicts.filter(v => v.model === m.id).length,
+            failed: result.verdicts.filter(v => v.model === m.id && v.verdict === 'false').map(v => v.spec),
+            notes: m.notes,
+            pflow: modelToPflow(m)
+        })),
+        markdown: markdownReport(result, models, [])
+    };
+}
+
 function jsonReport(result: ExtractionResult): unknown {
     const { facts, models, ...rest } = result;
     return {

@@ -246,3 +246,46 @@ print(closes["verdict"], replies["verdict"], fsm.state.value)
         expect(out.stdout.trim().split('\n')).toEqual(['false unknown', 'false unknown idle']);
     }, 120_000);
 });
+
+describe('POST /api/extract (code base models)', () => {
+    const SHOP = fileURLToPath(new URL('../../extract/test/fixtures/shop', import.meta.url));
+    const runner: RunnerConfig = { executable: '/nonexistent/nuXmv', timeoutMs: 10_000, maxOutputBytes: 1_000_000 };
+    const servers: Server[] = [];
+    afterAll(() => servers.forEach(s => s.close()));
+    const start = (allowLocalPaths: boolean) =>
+        new Promise<string>(resolve => {
+            const server = createApp({ runner, allowLocalPaths }).listen(0, '127.0.0.1', () => resolve(`http://127.0.0.1:${(server.address() as AddressInfo).port}`));
+            servers.push(server);
+        });
+    const extract = (url: string, body: unknown) => fetch(`${url}/api/extract`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+
+    it('analyses a folder of the server by path, with the models as .pflow text', async () => {
+        const url = await start(true);
+        expect((await (await fetch(`${url}/api/health`)).json()).extract).toEqual({ paths: true });
+        const res = await extract(url, { path: SHOP });
+        expect(res.status).toBe(200);
+        const body = await res.json();
+        expect(body.checkedWith).toBe('explicit');
+        expect(body.findings.some((f: { rule: string }) => f.rule === 'resource-leak')).toBe(true);
+        const order = body.models.find((m: { subject: string }) => m.subject === 'Order.status');
+        expect(order.pflow).toContain('diagram Order_status');
+        expect(body.markdown).toContain('# ProvenFlow code model report');
+    });
+
+    it('analyses uploaded files, with the config sent along', async () => {
+        const url = await start(false);
+        const files = {
+            'src/poller.ts': 'export class Poller {\n    private timer?: ReturnType<typeof setInterval>;\n    start(): void {\n        this.timer = setInterval(() => undefined, 1000);\n    }\n    stop(): void {\n        clearInterval(this.timer);\n    }\n}\n'
+        };
+        const body = await (await extract(url, { files, config: { ignore: [] } })).json();
+        expect(body.root).toBe('(uploaded folder)');
+        expect(body.findings.map((f: { rule: string }) => f.rule)).toContain('resource-leak');
+    });
+
+    it('refuses paths when not allowed, and unsafe uploads', async () => {
+        const url = await start(false);
+        expect((await extract(url, { path: SHOP })).status).toBe(403);
+        expect((await extract(url, { files: { '../escape.ts': 'x' } })).status).toBe(400);
+        expect((await extract(url, {})).status).toBe(400);
+    });
+});

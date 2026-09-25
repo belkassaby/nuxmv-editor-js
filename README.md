@@ -341,6 +341,12 @@ them with nuXmv:
   (functional or object-oriented): mutated arguments, hidden global state, god classes, deep
   inheritance.
 
+In the editor, choose **File → Import code base…** and pick a folder on your computer (the sources
+are uploaded to the ProvenFlow server) or type a folder path. The path option is for when the
+server runs on your machine: the folder is then read in place, with its `node_modules`. Findings,
+models, patterns and paradigm profiles show in the dialog. **Open model** loads a model into the
+editor and checks it, so its counterexample is one click away. From a terminal:
+
 ```sh
 NUXMV_PATH=/path/to/nuXmv npx pflow extract path/to/project          # report in path/to/project/.provenflow/extract/
 npx pflow extract . --fail-on warning                                # CI gate (exit 5), report.sarif for code scanning
@@ -360,7 +366,8 @@ promises (layers, styles, patterns, machine properties, accepted exceptions) in
 `provenflow.config.json`.
 
 **Try it on ProvenFlow itself.** The repository has its own `provenflow.config.json`, and CI runs
-this check:
+this check. In the editor, use File → Import code base… with the path of your clone. From a
+terminal:
 
 ```sh
 npm install && npm run build
@@ -626,6 +633,7 @@ NUXMV_PATH=/path/to/nuXmv npx pflow check examples/mutex.pflow --engine bdd
 | POST   | `/api/live/<channel>/command` | `{ event }` sent to the running machine (two-way link) |
 | GET    | `/api/live/<channel>/commands` | Server-Sent Events stream of commands, read by `link_editor(..., commands=True)` |
 | POST   | `/api/nurv` | `{ diagram }`: NuRV monitor sources and build commands (needs `NURV_PATH`) |
+| POST   | `/api/extract` | `{ path }` (a folder of the server machine, when the server is bound to localhost; `PROVENFLOW_EXTRACT_PATHS=0` disables it) or `{ files: { "src/a.ts": "…" } }` (uploaded sources), plus optional `config`: findings, models with their `.pflow` text, patterns, paradigm and the Markdown report |
 
 The response contains the raw `stdout`/`stderr` and the parsed `results` (property, verdict, trace),
 `errors` and `warnings`.

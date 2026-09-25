@@ -34,6 +34,23 @@ code review is in [the state of the art, section 2.8](state-of-the-art.md#28-che
 
 ## Quick start
 
+**In the editor.** Choose File → Import code base…, then either:
+- **Choose folder…:** the sources, `package.json` and `provenflow.config.json` are uploaded to the
+  ProvenFlow server and deleted after the analysis. `node_modules` is not uploaded, so types from
+  libraries are only partly known.
+- **Type a folder path:** the folder is read in place, with its `node_modules`, which is more
+  precise. This is available when the server is bound to localhost, which is the default;
+  `PROVENFLOW_EXTRACT_PATHS=0` turns it off.
+
+The dialog then shows:
+- the findings by category, with their fix and counterexample;
+- the models, the patterns found, and the paradigm profile with the dependencies.
+
+**Open model** loads a model into the editor and checks it: the false property's Counterexample
+button replays the run on the diagram. **Download report** saves `report.md`.
+
+**From a terminal:**
+
 ```sh
 npm install && npm run build
 # nuXmv checks every property; without NUXMV_PATH an explicit-state checker covers the standard ones
@@ -82,6 +99,9 @@ What you should see:
 - about 48 properties checked;
 - **0 errors, 0 warnings**, and around 20 notes (long functions, and states only reachable
   through computed writes).
+
+In the editor, the same check is File → Import code base… with the path of your clone
+(e.g. `/Users/me/git/provenflow`).
 
 Then look at the results:
 - **Read the report:** `open .provenflow/extract/report.md`.

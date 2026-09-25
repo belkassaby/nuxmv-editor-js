@@ -11,6 +11,7 @@
           <button type="button" role="menuitem" (click)="newDiagram()">New diagram</button>
           <button type="button" role="menuitem" (click)="open()">Open .pflow…</button>
           <button type="button" role="menuitem" (click)="importAgentGraph()" title="LangGraph (JSON, Mermaid, Python source), CrewAI Flow, Mermaid or XState">Import agent graph…</button>
+          <button type="button" role="menuitem" (click)="importCodeBase()" title="Extract and verify the state machines, resource lifecycles, design patterns and layers of a TypeScript/Angular/Python project">Import code base…</button>
           <button type="button" role="menuitem" (click)="save()">Save .pflow <kbd>⌘S</kbd></button>
           <hr />
           <button type="button" role="menuitem" (click)="exportSmv()">Export nuXmv model (.smv)</button>
@@ -145,3 +146,4 @@
 </main>
 
 <app-help-dialog />
+<app-code-import-dialog (openModel)="openCodeModel($event)" />

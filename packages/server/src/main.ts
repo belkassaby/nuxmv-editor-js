@@ -11,7 +11,10 @@ const host = process.env['HOST'] ?? '127.0.0.1';
 const staticDir = process.env['STATIC_DIR'] ?? resolve(here, '../../app/dist/app/browser');
 const runner = configFromEnv();
 
-const app = createApp({ runner, staticDir, nurv: nurvExecutable() });
+const loopback = ['127.0.0.1', 'localhost', '::1'].includes(host);
+// Reading folders by path is for a server on this machine only (PROVENFLOW_EXTRACT_PATHS=0 turns it off).
+const allowLocalPaths = loopback && process.env['PROVENFLOW_EXTRACT_PATHS'] !== '0';
+const app = createApp({ runner, staticDir, nurv: nurvExecutable(), allowLocalPaths });
 app.listen(port, host, async () => {
     console.log(`provenflow server listening on http://${host}:${port}`);
     const info = await nuxmvInfo(runner);
