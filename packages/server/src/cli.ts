@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { readFile, writeFile } from 'node:fs/promises';
 import { parseArgs } from 'node:util';
-import { checkConformance, generateNotebook, generatePython, generateSmv, matchResults, parseDiagram, parseTrace } from '@nuxmv-editor/language';
+import { checkConformance, generateNotebook, generatePython, generatePythonTests, generateSmv, matchResults, parseDiagram, parseTrace } from '@nuxmv-editor/language';
 import { configFromEnv, ENGINES, runNuxmv, type Engine } from './nuxmv-runner.js';
 
 const USAGE = `Usage:
@@ -12,6 +12,8 @@ const USAGE = `Usage:
   nxd notebook <diagram.nxd> [-o notebook.ipynb] [--verify]
                                                  write a Jupyter notebook showcasing it; --verify runs
                                                  nuXmv first to include verdicts and counterexamples
+  nxd pytest <diagram.nxd> [-o test_module.py] [--verify]
+                                                 write Hypothesis property-based tests for the Python module
   nxd conform <diagram.nxd> <run.jsonl|otel.json>
                                                  check a recorded run against the model (exit 4 if it deviates)`;
 
@@ -67,6 +69,19 @@ async function main(): Promise<number> {
         const { notebook, python } = await generateNotebook(parsed.model, { sourceName: file, verdicts, counterexamples });
         const out = values.output ?? `${python.moduleName}.ipynb`;
         await writeFile(out, notebook, 'utf8');
+        console.log(`wrote ${out}`);
+        return 0;
+    }
+    if (command === 'pytest') {
+        let counterexamples: Array<{ property: string; states: string[] }> | undefined;
+        if (values.verify) {
+            const result = await runNuxmv(text, { engine: 'bdd' }, configFromEnv());
+            const matched = matchResults(parsed.model.specs, result.results);
+            counterexamples = matched.flatMap((r, i) => (r?.trace ? [{ property: parsed.model.specs[i].name ?? parsed.model.specs[i].expression, states: r.trace.steps.map(s => s.values['state'] ?? '') }] : []));
+        }
+        const tests = await generatePythonTests(parsed.model, { sourceName: file, counterexamples });
+        const out = values.output ?? tests.fileName;
+        await writeFile(out, tests.code, 'utf8');
         console.log(`wrote ${out}`);
         return 0;
     }

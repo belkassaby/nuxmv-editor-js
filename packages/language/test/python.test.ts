@@ -3,7 +3,7 @@ import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { checkConformance, EXAMPLES, generateNotebook, generatePython, parseDiagram, parseTrace, Semantics } from '../src/index.js';
+import { checkConformance, EXAMPLES, generateNotebook, generatePython, generatePythonTests, parseDiagram, parseTrace, Semantics } from '../src/index.js';
 
 const python = ['python3', 'python'].find(cmd => spawnSync(cmd, ['--version']).status === 0);
 
@@ -175,6 +175,22 @@ print(json.dumps([json.loads(s.to_json()) for s in exporter.get_finished_spans()
         expect(records.length).toBeGreaterThan(3);
         expect(report.issues).toEqual([]);
     });
+
+    const hypothesis = spawnSync(python!, ['-c', 'import hypothesis, pytest']).status === 0;
+    it.skipIf(!hypothesis)('generated property-based tests pass, and catch a buggy hook', async () => {
+        const { model } = await parseDiagram(EXAMPLES.find(e => e.id === 'agent-retry-data')!.source);
+        const py = await generatePython(model);
+        const tests = await generatePythonTests(model);
+        writeFileSync(join(dir, `${py.moduleName}.py`), py.code);
+        writeFileSync(join(dir, tests.fileName), tests.code);
+        const ok = spawnSync(python!, ['-m', 'pytest', '-q', '-p', 'no:cacheprovider', tests.fileName], { cwd: dir, encoding: 'utf8' });
+        expect(ok.status, ok.stdout).toBe(0);
+        const buggy = tests.code.replace(`FSM = m.${py.className}`, `class Buggy(m.${py.className}):\n    def on_enter_human(self, event, data):\n        self.variables["retries"] = 7\n\nFSM = Buggy`);
+        writeFileSync(join(dir, 'test_buggy.py'), buggy);
+        const bad = spawnSync(python!, ['-m', 'pytest', '-q', '-p', 'no:cacheprovider', 'test_buggy.py'], { cwd: dir, encoding: 'utf8' });
+        expect(bad.status).not.toBe(0);
+        expect(bad.stdout).toContain("('retries', 7)");
+    }, 60_000);
 
     it('past-time operators follow their semantics step by step', async () => {
         const { model } = await parseDiagram(`

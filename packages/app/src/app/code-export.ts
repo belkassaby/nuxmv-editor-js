@@ -1,5 +1,5 @@
 import { effect, Injectable, inject, signal } from '@angular/core';
-import { generateNotebook, generatePython, type GeneratedPython } from '@nuxmv-editor/language';
+import { generateNotebook, generatePython, generatePythonTests, type GeneratedPython } from '@nuxmv-editor/language';
 import { DiagramStore } from './diagram-store';
 import { downloadText } from './file-io';
 
@@ -36,15 +36,25 @@ export class CodeExport {
         downloadText(`${py.moduleName}.py`, py.code, 'text/x-python');
     }
 
+    async downloadTests(): Promise<void> {
+        const tests = await generatePythonTests(this.store.model(), { sourceName: this.store.fileName(), counterexamples: this.counterexamples() });
+        downloadText(tests.fileName, tests.code, 'text/x-python');
+    }
+
+    private counterexamples(): Array<{ property: string; states: string[]; loopStart?: number }> {
+        const model = this.store.model();
+        const v = this.store.verification();
+        const current = v && !v.running && !v.stale ? v : null;
+        return (current?.results ?? []).flatMap((r, i) =>
+            r?.trace ? [{ property: model.specs[i]?.name ?? model.specs[i]?.expression ?? '', states: r.trace.steps.map(s => s.values['state'] ?? ''), loopStart: r.trace.loopStart }] : []
+        );
+    }
+
     async downloadNotebook(): Promise<void> {
         const model = this.store.model();
         const v = this.store.verification();
         const current = v && !v.running && !v.stale ? v : null;
-        const counterexamples = (current?.results ?? []).flatMap((r, i) =>
-            r?.trace
-                ? [{ property: model.specs[i]?.name ?? model.specs[i]?.expression ?? '', states: r.trace.steps.map(s => s.values['state'] ?? ''), loopStart: r.trace.loopStart }]
-                : []
-        );
+        const counterexamples = this.counterexamples();
         const { notebook, python } = await generateNotebook(model, {
             sourceName: this.store.fileName(),
             verdicts: current?.results.map(r => r?.verdict),

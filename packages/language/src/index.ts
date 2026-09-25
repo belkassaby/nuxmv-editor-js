@@ -7,6 +7,7 @@ export * from './legacy-attributes.js';
 export * from './examples.js';
 export * from './python-generator.js';
 export * from './notebook-generator.js';
+export * from './pytest-generator.js';
 export * from './semantics.js';
 export * from './conformance.js';
 export { astToModel } from './ast-to-model.js';

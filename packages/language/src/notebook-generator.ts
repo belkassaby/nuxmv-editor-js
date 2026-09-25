@@ -295,3 +295,13 @@ function eventsWithData(states: string[], g: GeneratedPython, sem: Semantics): s
     }
     return events;
 }
+
+/** Walk-through events of a diagram (a shortest path to a final state when there is one). */
+export async function walkThrough(model: DiagramModel, g: GeneratedPython): Promise<{ events: string[]; states: string[]; reaches?: string }> {
+    return hasData(model) ? demoPathWithData(model, g, await Semantics.of(model)) : demoPath(model, g.transitions);
+}
+
+/** Events that replay a sequence of states (e.g. a nuXmv trace), respecting guards; null if impossible. */
+export async function replayEvents(model: DiagramModel, g: GeneratedPython, states: string[]): Promise<string[] | null> {
+    return hasData(model) ? eventsWithData(states, g, await Semantics.of(model)) : eventsFor(states, g.transitions);
+}
