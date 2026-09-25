@@ -1,4 +1,4 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, computed, effect, inject, signal, untracked } from '@angular/core';
 import { analyse, exportPrism, type ProbabilisticQuery, type ProbabilisticResult } from '@nuxmv-editor/language';
 import { DiagramStore } from '../diagram-store';
 import { downloadText } from '../file-io';
@@ -22,8 +22,18 @@ export class ProbabilityPanel {
     readonly running = signal(false);
     readonly hasProbabilities = computed(() => this.store.model().transitions.some(t => t.probability !== undefined));
 
+    /** True once the user changed the queries: stop replacing them with suggestions. */
+    private edited = false;
+
     constructor() {
-        this.rows.set(this.suggest());
+        // Suggestions follow the diagram (a new file or example) until the user edits them.
+        effect(() => {
+            this.store.model();
+            untracked(() => {
+                if (!this.edited) this.rows.set(this.suggest());
+                this.results.set(null);
+            });
+        });
     }
 
     /** Default queries: reaching each final state, and the expected steps to the first one. */
@@ -37,14 +47,17 @@ export class ProbabilityPanel {
     }
 
     add(): void {
+        this.edited = true;
         this.rows.update(r => [...r, { kind: 'reach', target: '', bound: '', count: '' }]);
     }
 
     remove(i: number): void {
+        this.edited = true;
         this.rows.update(r => r.filter((_, k) => k !== i));
     }
 
     set(i: number, patch: Partial<QueryRow>): void {
+        this.edited = true;
         this.rows.update(r => r.map((row, k) => (k === i ? { ...row, ...patch } : row)));
         this.results.set(null);
     }
