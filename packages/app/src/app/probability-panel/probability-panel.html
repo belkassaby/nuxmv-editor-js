@@ -1,0 +1,37 @@
+<h4>Probabilistic analysis</h4>
+<p class="muted small">
+  Treats the diagram as a Markov chain using the transition probabilities (<code>prob</code> in the inspector); transitions without one share what is left.
+  @if (!hasProbabilities()) { <strong>No transition has a probability yet: all choices are equally likely.</strong> }
+</p>
+<ul class="spec-list">
+  @for (row of rows(); track $index; let i = $index) {
+    <li class="spec prob-row">
+      <select (change)="set(i, { kind: $any($event.target).value })" aria-label="Query">
+        <option value="reach" [selected]="row.kind === 'reach'">P(reach)</option>
+        <option value="steps" [selected]="row.kind === 'steps'">E[steps until]</option>
+        <option value="visits" [selected]="row.kind === 'visits'">E[visits before]</option>
+      </select>
+      @if (row.kind === 'visits') {
+        <input #c class="mono" placeholder="counted, e.g. phase = escalated" [value]="row.count" (change)="set(i, { count: c.value })" spellcheck="false" />
+      }
+      <input #t class="mono expr" [placeholder]="row.kind === 'visits' ? 'until, e.g. phase = done' : 'target, e.g. phase = done'" [value]="row.target" (change)="set(i, { target: t.value })" spellcheck="false" />
+      @if (row.kind === 'reach') {
+        <input #b class="narrow" type="number" min="0" placeholder="within k" [value]="row.bound" (change)="set(i, { bound: b.value })" title="Optional step bound" />
+      }
+      <span class="mono prob-value">@if (results()?.[i]; as r) { {{ fmt(r.value) }} }</span>
+      <button type="button" class="icon danger" (click)="remove(i)" aria-label="Remove query">×</button>
+    </li>
+  }
+</ul>
+<div class="actions">
+  <button type="button" (click)="add()">+ Query</button>
+  <button type="button" class="primary" (click)="compute()" [disabled]="running() || store.model().states.length === 0">Compute</button>
+  <button type="button" (click)="exportPrism()" [disabled]="store.model().states.length === 0" title="Explicit DTMC and properties for PRISM or Storm (full PCTL, rewards, steady state)">Export PRISM model</button>
+</div>
+@if (error()) { <p class="error-text">{{ error() }}</p> }
+@if (results(); as rs) {
+  <ul class="muted small">
+    @for (r of rs; track $index) { <li class="mono">{{ r.description }}</li> }
+  </ul>
+  @if (info()) { <p class="muted small">{{ info() }}</p> }
+}

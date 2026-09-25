@@ -2,11 +2,13 @@ import { Component, computed, inject } from '@angular/core';
 import type { FairnessKind, SpecKind } from '@nuxmv-editor/language';
 import { DiagramStore } from '../diagram-store';
 import { HelpService } from '../help-dialog/help.service';
+import { ProbabilityPanel } from '../probability-panel/probability-panel';
 import { ENGINE_LABELS, NuxmvApi, type Engine } from '../nuxmv-api';
 
 /** Temporal properties, fairness constraints, and their verification results. */
 @Component({
     selector: 'app-properties-panel',
+    imports: [ProbabilityPanel],
     templateUrl: './properties-panel.html'
 })
 export class PropertiesPanel {

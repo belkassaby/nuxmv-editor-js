@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { readFile, writeFile } from 'node:fs/promises';
 import { parseArgs } from 'node:util';
-import { checkConformance, exportToFramework, importGraph, serializeDiagram, FRAMEWORKS, generateNotebook, generatePython, generatePythonTests, generateSmv, matchResults, parseDiagram, parseTrace, type Framework } from '@nuxmv-editor/language';
+import { analyse, checkConformance, exportPrism, exportToFramework, importGraph, serializeDiagram, type ProbabilisticQuery, FRAMEWORKS, generateNotebook, generatePython, generatePythonTests, generateSmv, matchResults, parseDiagram, parseTrace, type Framework } from '@nuxmv-editor/language';
 import { configFromEnv, ENGINES, runNuxmv, type Engine } from './nuxmv-runner.js';
 
 const USAGE = `Usage:
@@ -18,6 +18,10 @@ const USAGE = `Usage:
                                                  export the verified machine to an agent/workflow framework
   nxd import <graph> [-o diagram.nxd]            import a LangGraph (JSON, Mermaid, source), CrewAI Flow,
                                                  Mermaid or XState graph as a diagram
+  nxd prob <diagram.nxd> [--reach EXPR] [--within K] [--steps EXPR] [--visits EXPR --until EXPR]
+                                                 probabilistic analysis of the diagram as a Markov chain
+  nxd prism <diagram.nxd> [-o model.pm] [--reach EXPR ...]
+                                                 export the Markov chain to PRISM / Storm (model + .pctl)
   nxd conform <diagram.nxd> <run.jsonl|otel.json>
                                                  check a recorded run against the model (exit 4 if it deviates)`;
 
@@ -29,7 +33,12 @@ async function main(): Promise<number> {
             engine: { type: 'string', default: 'bdd' },
             bound: { type: 'string', default: '10' },
             help: { type: 'boolean', short: 'h' },
-            verify: { type: 'boolean', default: false }
+            verify: { type: 'boolean', default: false },
+            reach: { type: 'string', multiple: true },
+            within: { type: 'string' },
+            steps: { type: 'string', multiple: true },
+            visits: { type: 'string' },
+            until: { type: 'string' }
         }
     });
     const [command, ...rest] = positionals;
@@ -106,6 +115,26 @@ async function main(): Promise<number> {
         const target = values.output ?? out.fileName;
         await writeFile(target, out.code, 'utf8');
         console.log(`wrote ${target}${out.requires.length ? ` (needs ${out.requires.join(', ')}: nxd python ${file})` : ''}`);
+        return 0;
+    }
+    if (command === 'prob' || command === 'prism') {
+        const queries: ProbabilisticQuery[] = [
+            ...(values.reach ?? []).map(target => ({ kind: 'reach' as const, target, ...(values.within ? { bound: Number(values.within) } : {}) })),
+            ...(values.steps ?? []).map(target => ({ kind: 'steps' as const, target })),
+            ...(values.visits && values.until ? [{ kind: 'visits' as const, count: values.visits, target: values.until }] : [])
+        ];
+        if (command === 'prism') {
+            const out = await exportPrism(parsed.model, queries);
+            const target = values.output ?? `${(parsed.model.name ?? 'main').toLowerCase()}.pm`;
+            await writeFile(target, out.model, 'utf8');
+            await writeFile(target.replace(/\.pm$/, '') + '.pctl', out.properties, 'utf8');
+            console.log(`wrote ${target} and ${target.replace(/\.pm$/, '')}.pctl`);
+            return 0;
+        }
+        if (queries.length === 0) throw new Error('Give at least one query, e.g. --reach "phase = done".');
+        const { dtmc, results } = await analyse(parsed.model, queries);
+        console.log(`${dtmc.configurations.length} configuration(s)${dtmc.normalised ? ' (some probabilities filled in or normalised)' : ''}`);
+        for (const r of results) console.log(r.description);
         return 0;
     }
     if (command === 'conform') {
