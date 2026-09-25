@@ -299,7 +299,13 @@ export class Lamp {
         const llm = scripted([
             [
                 /Poller can lose the interval/,
-                { edits: [{ file: 'src/ui/widgets.ts', search: "    start(): void {\n        this.timer", replace: "    start(): void {\n        if (this.timer) return;\n        this.timer" }], explanation: 'Do not start twice.' }
+                {
+                    edits: [
+                        { file: 'src/ui/widgets.ts', search: "    start(): void {\n        this.timer", replace: "    start(): void {\n        if (this.timer) return;\n        this.timer" },
+                        { file: 'src/ui/widgets.ts', search: '    stop(): void {', replace: '    dispose(): void {\n        this.stop();\n    }\n\n    stop(): void {' }
+                    ],
+                    explanation: 'Do not start twice, and stop the timer when the poller is disposed.'
+                }
             ],
             [/EventBus registers observers/, { edits: [{ file: 'src/core/registry.ts', search: 'text that is not in the file', replace: 'x' }] }]
         ]);

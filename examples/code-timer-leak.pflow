@@ -1,0 +1,30 @@
+// Extracted from a code base by pflow extract: the lifecycle of a timer held by a class.
+// Source: packages/extract/test/fixtures/shop/src/ui/widgets.ts (TypeScript)
+//
+//   export class Poller {
+//       private timer?: ReturnType<typeof setInterval>;
+//       start(): void { this.timer = setInterval(() => console.log('tick'), 1000); }
+//       stop(): void { clearInterval(this.timer); }
+//   }
+//
+// States: idle (no timer), held (a timer runs), leaked (a timer runs that nothing can stop),
+// disposed (the object is gone). Events are the public methods; with no dispose method the
+// object can be discarded at any time. Check it: never_leaked is false, with two counterexamples
+// the model allows: start twice (the first timer is lost), or drop a running Poller.
+// Fix in the code: return early in start() when this.timer is set, and add dispose() calling stop().
+
+diagram Poller_interval_this_timer
+
+initial state idle
+state held
+state leaked
+state disposed
+
+idle -> held : "Poller.start";
+held -> leaked : "Poller.start, Poller discarded (no dispose method)";
+held -> idle : "Poller.stop";
+idle -> disposed : "Poller discarded";
+leaked -> leaked : "stays";
+disposed -> disposed : "stays";
+
+INVARSPEC NAME never_leaked := !(state = leaked);

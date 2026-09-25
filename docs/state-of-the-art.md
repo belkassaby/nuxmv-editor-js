@@ -267,7 +267,8 @@ drawn design.
   - **CodeRabbit** combines LLM review with linters and SAST tools.
 
 **ProvenFlow compared.** `pflow extract` reads TypeScript (with the type checker), Angular
-templates and Python. From them it builds four kinds of model:
+templates and Python. Through tree-sitter grammars it also reads Java, Kotlin, Groovy, Scala, C,
+C++, C#, Go, Rust, Swift, Ruby, PHP and R. From them it builds four kinds of model:
 - state machines of fields with finite types;
 - typestate models of resource lifecycles;
 - behavioural contracts of design patterns;
@@ -346,7 +347,9 @@ it generates are for that.
 - *Operations*: no persistence, scheduling or distribution (these are delegated to Temporal,
   LangGraph and Burr); NuRV is licensed separately; importing Python source is best effort.
 - *Standards*: the tracing does not yet use the OpenTelemetry GenAI span names.
-- *Code models*: TypeScript/JavaScript and Python only. The extraction is an abstraction:
+- *Code models*: 15 languages, but only TypeScript is read with a type checker. The other
+  languages are read syntactically, so types that come from another file's inference (`var x =
+  f()`) are unknown. The extraction is an abstraction:
   conditions on other variables and aliasing are not tracked, and patterns are recognised by
   shape. There is no dataflow, security or memory-safety analysis (use CodeQL, Semgrep, Infer or
   CBMC alongside).

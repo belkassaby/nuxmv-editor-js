@@ -3,9 +3,10 @@ import { spawnSync } from 'node:child_process';
 import { readdirSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 
-export const DEFAULT_EXCLUDE = ['**/node_modules/**', '**/dist/**', '**/out/**', '**/build/**', '**/.angular/**', '**/*.d.ts', '**/generated/**', '**/.venv/**', '**/venv/**', '**/__pycache__/**'];
-const EXTENSIONS = /\.(ts|tsx|mts|cts|py)$/;
-const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', 'out', 'build', '.angular', '.venv', 'venv', '__pycache__', '.provenflow']);
+export const DEFAULT_EXCLUDE = ['**/node_modules/**', '**/dist/**', '**/out/**', '**/build/**', '**/.angular/**', '**/*.d.ts', '**/generated/**', '**/.venv/**', '**/venv/**', '**/__pycache__/**', '**/target/**', '**/bin/**', '**/obj/**', '**/vendor/**', '**/.gradle/**', '**/renv/**'];
+// TypeScript/JavaScript modules, Python, and the tree-sitter languages (see treesitter/languages.ts).
+const EXTENSIONS = /\.(ts|tsx|mts|cts|py|java|kts?|groovy|gradle|scala|sc|c|h|cpp|cc|cxx|hpp|hh|hxx|h\+\+|cs|go|rs|swift|rb|php|R|r)$/;
+const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', 'out', 'build', '.angular', '.venv', 'venv', '__pycache__', '.provenflow', 'target', 'bin', 'obj', 'vendor', '.gradle', '.idea', 'cmake-build-debug', 'renv']);
 
 export function listSourceFiles(root: string, include: string[] = [], exclude: string[] = []): string[] {
     const all = gitFiles(root) ?? walk(root);
@@ -49,7 +50,15 @@ function walk(root: string, dir = root, files: string[] = []): string[] {
 }
 
 export function isTestFile(file: string): boolean {
-    return /(^|\/)(test|tests|__tests__|spec)\//.test(file) || /\.(test|spec)\.[cm]?[tj]sx?$/.test(file) || /(^|\/)test_[^/]*\.py$/.test(file) || /_test\.py$/.test(file) || /(^|\/)conftest\.py$/.test(file);
+    return (
+        /(^|\/)(test|tests|__tests__|spec|src\/test|testthat)\//.test(file) ||
+        /\.(test|spec)\.[cm]?[tj]sx?$/.test(file) ||
+        /(^|\/)test_[^/]*\.(py|R|r)$/.test(file) ||
+        /_test\.(py|go|rb|exs?)$/.test(file) ||
+        /(^|\/)conftest\.py$/.test(file) ||
+        /(Test|Tests|Spec|IT)\.(java|kt|groovy|scala|cs|swift)$/.test(file) ||
+        /_spec\.rb$/.test(file)
+    );
 }
 
 /** `**` matches any number of directories, `*` anything but `/`, `?` one character. */

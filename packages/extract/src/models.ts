@@ -148,6 +148,11 @@ export class ModelBuilder {
     }
 
     build(): ExtractedModel {
+        // States no code leaves stay where they are: explicit, so the model opens in the editor
+        // without dead-end warnings (nuXmv would stutter there anyway).
+        for (const st of this.model.states) {
+            if (!this.model.transitions.some(t => t.source === st.name)) this.model.transitions.push({ source: st.name, target: st.name, label: 'stays' });
+        }
         const values: Record<string, string> = {};
         for (const [value, id] of this.ids) values[id] = value;
         return { id: this.id, kind: this.kind, subject: this.subject, loc: this.loc, model: this.model, evidence: this.evidence, origins: this.origins, values, notes: this.notes };

@@ -46,6 +46,10 @@ describe.skipIf(!python)('generated Python (runs with the system Python)', () =>
 
     it.each(EXAMPLES.map(e => [e.id]))('%s: compiles, rejects illegal events, and random walks never trip a monitor', async id => {
         const { py } = await generate(id);
+        // Models of buggy code (Code base models) declare a false invariant: its monitor must trip.
+        const example = EXAMPLES.find(e => e.id === id)!;
+        const specs = (await parseDiagram(example.source)).model.specs;
+        const tripExpected = specs.some((s, i) => s.kind === 'INVARSPEC' && example.expected[i] === 'false');
         writeFileSync(join(dir, `${py.moduleName}.py`), py.code);
         const out = run(`
 import random, ${py.moduleName} as m
@@ -57,16 +61,21 @@ if illegal:
     except m.InvalidTransition:
         pass
 rng = random.Random(3)
+tripped = False
 for _ in range(15):
     fsm = m.${py.className}()
     for _ in range(150):
         ev = fsm.allowed_events()
         if not ev: break
-        fsm.send(rng.choice(ev))
+        try:
+            fsm.send(rng.choice(ev))
+        except m.PropertyViolation:
+            tripped = True
+            break
 assert fsm._repr_svg_().startswith("<svg")
-print("ok")
+print("ok", tripped)
 `);
-        expect(out.trim()).toBe('ok');
+        expect(out.trim()).toBe(`ok ${tripExpected ? 'True' : 'False'}`);
     });
 
     it('agrees with the TypeScript semantics on a model with guards and data', async () => {

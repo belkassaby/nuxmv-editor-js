@@ -35,7 +35,9 @@ const USAGE = `Usage:
                 [--llm anthropic:<model>|openai:<model>|ollama:<model>] [--llm-fixes N]
                                                  extract verified models of a code base (state machines,
                                                  resource lifecycles, design patterns, architecture) and
-                                                 report bugs with fixes (exit 5 on findings at --fail-on)`;
+                                                 report bugs with fixes (exit 5 on findings at --fail-on).
+                                                 TypeScript, Python, Java, Kotlin, Groovy, Scala, C, C++,
+                                                 C#, Go, Rust, Swift, Ruby, PHP, R`;
 
 async function main(): Promise<number> {
     const { positionals, values } = parseArgs({

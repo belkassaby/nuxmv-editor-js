@@ -10,10 +10,14 @@ import type { ClassFact, Facts, ResourceKind, ResourceOpFact } from './ir.js';
 import { formatLocation } from './ir.js';
 import { ModelBuilder, slug, type ExtractedModel, type Finding } from './models.js';
 
-const DISPOSE = /^(ngOnDestroy|destroy|dispose|close|stop|disconnect|teardown|cleanup|shutdown|unmount|componentWillUnmount|__exit__|__aexit__|__del__|onDestroy)$/;
+/** Methods that end an object's life. */
+const DISPOSE = /^(ngOnDestroy|destroy|dispose|__exit__|__aexit__|__del__|onDestroy|__destruct|deinit|drop|finalize|onCleared|componentWillUnmount|unmount|~\w+)$|(_destroy|_free|_deinit)$/i;
+/** Methods that release but after which the object can be used again, unless the class is Closeable/Disposable. */
+const WEAK_DISPOSE = /^(close|stop|shutdown|cleanup|disconnect|teardown|cancel)$|(_close|_cleanup|_shutdown)$/i;
+const CLOSEABLE = /^(Closeable|AutoCloseable|IDisposable|IAsyncDisposable|Disposable|io\.Closer|Closer)$/;
 
 /** Resources whose loss matters even when the owner lives forever or never disposes. */
-const MUST_RELEASE_ON_ERROR = new Set<ResourceKind>(['temp-dir', 'file', 'lock']);
+const MUST_RELEASE_ON_ERROR = new Set<ResourceKind>(['temp-dir', 'file', 'lock', 'memory', 'socket']);
 
 const RELEASE_CALL: Record<ResourceKind, string> = {
     interval: 'clearInterval(handle)',
@@ -26,7 +30,10 @@ const RELEASE_CALL: Record<ResourceKind, string> = {
     'temp-dir': 'rm(dir, { recursive: true, force: true })',
     file: 'file.close() (or a with/using block)',
     lock: 'lock.release() (or a with block)',
-    graph: 'cy.destroy()'
+    graph: 'cy.destroy()',
+    memory: 'free(p) / delete p (or a smart pointer / RAII owner)',
+    socket: 'socket.close()',
+    executor: 'executor.shutdown()'
 };
 
 export interface LifecycleResult {
@@ -60,7 +67,7 @@ export function buildLifecycles(facts: Facts): LifecycleResult {
                         rule: 'release-not-guaranteed',
                         category: 'lifecycle',
                         severity: 'warning',
-                        subject: `${ownerName(owner)}.${acquire.member}`,
+                        subject: acquire.ownerKind === 'function' ? acquire.member : `${ownerName(owner)}.${acquire.member}`,
                         message: `The ${kind} acquired at ${formatLocation(acquire.loc)} is released at ${formatLocation(releases[0].loc)} only on the normal path: an exception in between leaks it.`,
                         fix: `Move the release into a finally block (try { ... } finally { ${RELEASE_CALL[kind]} }), or use a with/using block.`,
                         loc: acquire.loc,
@@ -129,7 +136,9 @@ function lifecycleModel(cls: ClassFact, kind: ResourceKind, handle: string, ops:
     const direct = (op: 'acquire' | 'release') => new Set(ops.filter(o => o.op === op).map(o => o.member));
     const closure = closeOverCalls(cls, direct('acquire'));
     const releaseClosure = closeOverCalls(cls, direct('release'));
-    const disposers = cls.methods.map(m => m.name).filter(n => DISPOSE.test(n));
+    const closeable = cls.implements.some(i => CLOSEABLE.test(i.replace(/<.*$/, ''))) || (cls.extends !== undefined && CLOSEABLE.test(cls.extends));
+    const isDispose = (name: string) => DISPOSE.test(name) || (closeable && WEAK_DISPOSE.test(name));
+    const disposers = cls.methods.map(m => m.name).filter(isDispose);
     if (ops.some(o => o.member === 'ngOnDestroy') && !disposers.includes('ngOnDestroy')) disposers.push('ngOnDestroy');
     const lives = cls.providedInRoot; // one instance for the whole application: never disposed
 
@@ -148,7 +157,7 @@ function lifecycleModel(cls: ClassFact, kind: ResourceKind, handle: string, ops:
 
     const locOf = (member: string, op: 'acquire' | 'release') => ops.find(o => o.member === member && o.op === op)?.loc ?? cls.methods.find(m => m.name === member)?.loc;
     for (const member of [...closure].filter(entry)) {
-        if (DISPOSE.test(member)) continue;
+        if (isDispose(member)) continue;
         const acquire = ops.find(o => o.member === member && o.op === 'acquire');
         const releaseFirst = releaseClosure.has(member) && releasesBeforeAcquiring(ops, member);
         const guarded = acquires.some(a => a.member === member && a.guarded);

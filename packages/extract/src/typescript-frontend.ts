@@ -203,6 +203,7 @@ class Extractor {
             const member = enclosingFunction(node);
             this.facts.instantiations.push({
                 className: node.expression.text,
+                language: 'typescript',
                 loc: this.ctx.loc(node),
                 inClass: cls?.name?.text,
                 inMember: member ? memberName(member) : undefined,

@@ -5,7 +5,7 @@
  * facts, so it works the same for every language.
  */
 
-export type Language = 'typescript' | 'python';
+export type Language = 'typescript' | 'python' | 'java' | 'kotlin' | 'groovy' | 'scala' | 'c' | 'cpp' | 'c_sharp' | 'go' | 'rust' | 'swift' | 'ruby' | 'php' | 'r';
 
 /** A place in the code base: file relative to the project root, 1-based line. */
 export interface Location {
@@ -81,7 +81,10 @@ export type ResourceKind =
     | 'temp-dir'
     | 'file'
     | 'lock'
-    | 'graph';
+    | 'graph'
+    | 'memory'
+    | 'socket'
+    | 'executor';
 
 /** Acquisition or release of a resource that must be given back. */
 export interface ResourceOpFact {
@@ -166,6 +169,8 @@ export interface ClassFact {
     methods: MethodFact[];
     /** Python classes: overrides `__new__`. */
     overridesNew?: boolean;
+    /** The language makes it a single instance (Kotlin/Scala `object`, Ruby `include Singleton`, Swift `static let shared`...). */
+    declaredSingleton?: boolean;
 }
 
 export interface InterfaceFact {
@@ -179,6 +184,8 @@ export interface InterfaceFact {
 
 export interface InstantiationFact {
     className: string;
+    /** Language of the file (classes of other languages with the same name are not this one). */
+    language?: Language;
     loc: Location;
     /** The class and method containing the `new`, if any. */
     inClass?: string;

@@ -9,7 +9,7 @@ editor or Jupyter, trace conformance checks and probabilistic analysis. The `pfl
 does the same from a terminal or CI.
 
 It also works the other way round, from code to model: `pflow extract` builds verified models of an
-existing (or AI-generated) code base. It extracts the code's state machines, resource lifecycles,
+existing (or AI-generated) code base in TypeScript/JavaScript (with Angular templates), Python, Java, Kotlin, Groovy, Scala, C, C++, C#, Go, Rust, Swift, Ruby, PHP and R. It extracts the code's state machines, resource lifecycles,
 design-pattern contracts and layer dependencies, and checks them with nuXmv. It reports each bug
 with the code path that shows it and a fix, and an optional LLM can propose patches that the tool
 re-checks. See [Model-checking a code base](#model-checking-a-code-base).
@@ -321,17 +321,21 @@ conformance checker and the Python runtime also agree step by step on models wit
 
 ## Model-checking a code base
 
-`pflow extract` turns a TypeScript/JavaScript, Angular or Python project into models and checks
-them with nuXmv:
+`pflow extract` turns a project into models and checks them with nuXmv. It reads
+TypeScript/JavaScript (with Angular templates), Python, Java, Kotlin, Groovy, Scala, C, C++, C#, Go, Rust, Swift, Ruby, PHP and R. TypeScript uses the compiler's type checker, Python its own `ast` module, and the
+other languages use [tree-sitter](https://tree-sitter.github.io) grammars compiled to WebAssembly
+(no native build). The findings are:
 
-- **State machines:** from every field typed as a finite set of values (a string-literal union, an
-  enum, `signal<Phase>`, a Python `Enum`/`Literal`). It finds:
+- **State machines:** from every field typed as a finite set of values: a string-literal union, an
+  enum, `signal<Phase>`, a Python `Enum`/`Literal`, a Java/Kotlin/C#/C/C++/Rust/Swift/PHP enum,
+  Go typed constants (`iota`), or Scala sealed traits. Ruby symbols and R strings written to a
+  `state`/`status` field also count. It finds:
   - values that are declared but never set (and the dead branches testing them);
   - states the machine can never leave or settle from;
   - `switch`/`match` statements missing cases;
   - writes after an `await` that rely on a check made before it.
 - **Resource lifecycles:** for timers, global listeners, EventSources, observers, processes, temp
-  dirs, files and locks. It finds a resource acquired twice, one never released on dispose, and a
+  dirs, files, sockets, locks and executors, and C/C++ memory (`malloc`/`free`, `new`/`delete`). It finds a resource acquired twice, one never released on dispose, and a
   release that is skipped on errors.
 - **Design patterns:** singleton, observer, builder, State, strategy, adapter/decorator, command,
   factory and facade are recognised. Each is checked against its contract: never two singletons,
@@ -435,6 +439,9 @@ packages/
 ├── extract/    @provenflow/extract   code base -> verified models (pflow extract)
 │   ├── src/typescript-*.ts             TypeScript checker front end (+ Angular templates)
 │   ├── src/python_facts.py             Python front end (ast), same facts as JSON
+│   ├── src/treesitter/                 Java, Kotlin, Groovy, Scala, C, C++, C#, Go, Rust, Swift,
+│   │                                   Ruby, PHP, R: one front end, a profile per language
+│   ├── grammars/                       vendored tree-sitter grammars (R, Groovy, newer Scala/Java)
 │   ├── src/machines.ts                 state machines of fields with finite types
 │   ├── src/lifecycles.ts               resource typestate models
 │   ├── src/patterns.ts                 design-pattern recognition and contract models
@@ -645,8 +652,11 @@ npm test            # language, extract, server and UI unit tests
 npm run check:code  # ProvenFlow model-checks its own code base (pflow extract . --fail-on warning)
 ```
 
-The extract tests run on `packages/extract/test/fixtures/shop`, a small TypeScript and Python
-project with one seeded bug of each kind. With `NUXMV_PATH` set they also check the nuXmv
+The extract tests run on two fixtures:
+- `packages/extract/test/fixtures/shop`: a small TypeScript and Python project with one seeded bug
+  of each kind.
+- `packages/extract/test/fixtures/polyglot`: the same job lifecycle in each of the 13 tree-sitter
+  languages, each with a state never set, a switch missing cases and a typical resource bug. With `NUXMV_PATH` set they also check the nuXmv
 counterexamples.
 
 Optional tools turn on more tests, and CI installs the Python packages:
@@ -680,6 +690,15 @@ nondeterministic transitions, so nuXmv checks every possible choice the model co
 | Collaboration (fixed pipeline)   | The same agents in a fixed sequence satisfy the ordering and termination properties  |
 | Chat agent                       | The machine's `done` state is unreachable: dead code in the original definition      |
 | Agent generation with testing    | Steps happen in order, but a failing test can retry forever                          |
+
+**Code base models**, extracted from code with `pflow extract` (File → Import code base…). Each
+one lists the source it came from in its header:
+
+| Example | What model checking shows |
+| --- | --- |
+| Order status (from TypeScript code) | A write after an `await` lets a cancelled order be paid and shipped; `refunded` is never set |
+| Timer leak (from TypeScript code) | Starting twice, or dropping a running poller, loses a timer nothing can stop |
+| Job lifecycle (from Java code) | `RETRYING` is declared but never reached |
 
 Every example lists the verdict nuXmv should return for each property, and the server tests check
 them against the real tool.

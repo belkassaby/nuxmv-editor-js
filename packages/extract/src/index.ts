@@ -19,6 +19,7 @@ import { analyseParadigm, type ParadigmProfile } from './paradigm.js';
 import { analysePatterns, checkExpectations, type PatternInstance } from './patterns.js';
 import { extractPython } from './python-frontend.js';
 import { listSourceFiles, matchesAny } from './scan.js';
+import { extractTreeSitter, TREE_SITTER_EXTENSIONS } from './treesitter/frontend.js';
 import { extractTypeScript } from './typescript-frontend.js';
 import { verifyModels, type Checker, type SpecVerdict } from './verify.js';
 
@@ -28,6 +29,7 @@ export * from './models.js';
 export * from './llm.js';
 export * from './report.js';
 export { listSourceFiles } from './scan.js';
+export { LANGUAGES } from './treesitter/frontend.js';
 export type { Checker, SpecVerdict } from './verify.js';
 export type { PatternInstance } from './patterns.js';
 export type { ParadigmProfile } from './paradigm.js';
@@ -67,7 +69,12 @@ export interface ExtractionResult {
 export async function extractProject(root: string, options: ExtractOptions = {}): Promise<ExtractionResult> {
     const config = options.config ?? loadConfig(root, options.configFile);
     const files = listSourceFiles(root, config.include, config.exclude);
-    const parsed = mergeFacts(extractTypeScript(root, files.filter(f => !f.endsWith('.py')), options.overrides), extractPython(root, files.filter(f => f.endsWith('.py')), options.overrides));
+    const isTypeScript = (f: string) => /\.(ts|tsx|mts|cts)$/.test(f);
+    const isTreeSitter = (f: string) => !isTypeScript(f) && !f.endsWith('.py') && TREE_SITTER_EXTENSIONS.some(e => f.endsWith(e));
+    const parsed = mergeFacts(
+        mergeFacts(extractTypeScript(root, files.filter(isTypeScript), options.overrides), extractPython(root, files.filter(f => f.endsWith('.py')), options.overrides)),
+        await extractTreeSitter(root, files.filter(isTreeSitter), options.overrides)
+    );
 
     const llmLog: LlmLog = { accepted: [], rejected: [] };
     const record = (log: LlmLog) => {

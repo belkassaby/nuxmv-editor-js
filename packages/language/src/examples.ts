@@ -1,7 +1,7 @@
 export interface Example {
     id: string;
     title: string;
-    group: 'Classic models' | 'Agentic AI patterns';
+    group: 'Classic models' | 'Agentic AI patterns' | 'Code base models';
     description: string;
     source: string;
     /** Verdict nuXmv returns for each specification, in declaration order (checked by the tests). */
@@ -674,6 +674,152 @@ LTLSPEC NAME actors_before_code := !(step = writing) U step = actors;
 CTLSPEC NAME can_finish := AG EF step = finished;
 LTLSPEC NAME always_finishes := F step = finished;
 LTLSPEC NAME tested_before_done := !(step = finished) U step = testing;
+`
+    },
+    {
+        id: 'code-order-lifecycle',
+        group: 'Code base models',
+        expected: ['true', 'true', 'true', 'true', 'true', 'false', 'true', 'false'],
+        title: 'Order status (from TypeScript code)',
+        description: 'A state machine extracted from the status field of a class: a write after an await breaks "once cancelled, never shipped".',
+        source: `// Extracted from a code base by pflow extract (File -> Import code base...).
+// Source: packages/extract/test/fixtures/shop/src/core/order.ts (TypeScript)
+//
+//   export type OrderStatus = 'draft' | 'submitted' | 'paid' | 'shipped' | 'cancelled' | 'refunded';
+//   export class Order {
+//       status: OrderStatus = 'draft';
+//       submit(): void { if (this.status !== 'draft') return; this.status = 'submitted'; }
+//       async pay(api: PaymentApi): Promise<void> {
+//           if (this.status !== 'submitted') return;
+//           await api.charge(10);          // cancel() can run while the charge is pending
+//           this.status = 'paid';
+//       }
+//       cancel(): void { if (this.status === 'shipped') throw new Error('already shipped'); this.status = 'cancelled'; }
+//       ship(): void { if (this.status === 'paid') this.status = 'shipped'; }
+//       isRefunded(): boolean { return this.status === 'refunded'; }
+//   }
+//
+// Every transition is an assignment of 'status'; the states it can start from come from the
+// conditions and early returns around it. pay() writes after an await without re-checking, so
+// it can move any state to 'paid'. Check it: 'refunded' is never set (isRefunded() is dead code),
+// and "once cancelled, never shipped" is false: the counterexample is cancel -> pay -> ship.
+// Fix in the code: re-check the status after the await (if (this.status !== 'submitted') return;).
+
+diagram Order_status
+
+initial state draft
+state submitted
+state paid
+state shipped
+state cancelled
+state refunded
+
+draft -> submitted : "Order.submit";
+draft -> paid : "Order.pay";
+submitted -> paid : "Order.pay";
+shipped -> paid : "Order.pay";
+cancelled -> paid : "Order.pay";
+refunded -> paid : "Order.pay";
+draft -> cancelled : "Order.cancel";
+submitted -> cancelled : "Order.cancel";
+paid -> cancelled : "Order.cancel";
+cancelled -> cancelled : "Order.cancel";
+refunded -> cancelled : "Order.cancel";
+paid -> shipped : "Order.ship";
+
+CTLSPEC NAME reach_draft := EF state = draft;
+CTLSPEC NAME reach_submitted := EF state = submitted;
+CTLSPEC NAME reach_paid := EF state = paid;
+CTLSPEC NAME reach_shipped := EF state = shipped;
+CTLSPEC NAME reach_cancelled := EF state = cancelled;
+CTLSPEC NAME reach_refunded := EF state = refunded;
+CTLSPEC NAME can_settle := AG EF (state = shipped | state = cancelled | state = refunded | state = draft);
+CTLSPEC NAME config_1 := AG (state = cancelled -> AG state != shipped);
+`
+    },
+    {
+        id: 'code-timer-leak',
+        group: 'Code base models',
+        expected: ['false'],
+        title: 'Timer leak (from TypeScript code)',
+        description: 'The lifecycle of a timer held by a class: started twice, or dropped while running, it can never be stopped.',
+        source: `// Extracted from a code base by pflow extract: the lifecycle of a timer held by a class.
+// Source: packages/extract/test/fixtures/shop/src/ui/widgets.ts (TypeScript)
+//
+//   export class Poller {
+//       private timer?: ReturnType<typeof setInterval>;
+//       start(): void { this.timer = setInterval(() => console.log('tick'), 1000); }
+//       stop(): void { clearInterval(this.timer); }
+//   }
+//
+// States: idle (no timer), held (a timer runs), leaked (a timer runs that nothing can stop),
+// disposed (the object is gone). Events are the public methods; with no dispose method the
+// object can be discarded at any time. Check it: never_leaked is false, with two counterexamples
+// the model allows: start twice (the first timer is lost), or drop a running Poller.
+// Fix in the code: return early in start() when this.timer is set, and add dispose() calling stop().
+
+diagram Poller_interval_this_timer
+
+initial state idle
+state held
+state leaked
+state disposed
+
+idle -> held : "Poller.start";
+held -> leaked : "Poller.start, Poller discarded (no dispose method)";
+held -> idle : "Poller.stop";
+idle -> disposed : "Poller discarded";
+leaked -> leaked : "stays";
+disposed -> disposed : "stays";
+
+INVARSPEC NAME never_leaked := !(state = leaked);
+`
+    },
+    {
+        id: 'code-java-job',
+        group: 'Code base models',
+        expected: ['true', 'true', 'true', 'true', 'false', 'true'],
+        title: 'Job lifecycle (from Java code)',
+        description: 'A state machine extracted from an enum-typed field in Java: one declared state is never reached.',
+        source: `// Extracted from a Java code base by pflow extract (13 languages are read the same way:
+// Java, Kotlin, Groovy, Scala, C, C++, C#, Go, Rust, Swift, Ruby, PHP and R, plus TypeScript and Python).
+// Source: packages/extract/test/fixtures/polyglot/java/src/main/java/app/Job.java
+//
+//   enum State { IDLE, RUNNING, DONE, FAILED, RETRYING }
+//   public class Job {
+//       private State state = State.IDLE;
+//       public void start()  { if (state != State.IDLE) return; state = State.RUNNING; }
+//       public void finish() { if (this.state == State.RUNNING) { this.state = State.DONE; } }
+//       public void fail()   { state = State.FAILED; }
+//       public String describe() { switch (state) { case IDLE: ... case RUNNING: ... case DONE: ... } return ""; }
+//   }
+//
+// Check it: RETRYING is declared but no code sets it, and FAILED is final (fail() works from any
+// state, even DONE: is that intended?). pflow extract also reports that describe() has no case
+// for FAILED and RETRYING.
+
+diagram Job_state
+
+initial state IDLE
+state RUNNING
+state DONE
+state FAILED
+state RETRYING
+
+IDLE -> RUNNING : "Job.start";
+RUNNING -> DONE : "Job.finish";
+IDLE -> FAILED : "Job.fail";
+RUNNING -> FAILED : "Job.fail";
+DONE -> FAILED : "Job.fail";
+RETRYING -> FAILED : "Job.fail";
+FAILED -> FAILED : "stays";
+
+CTLSPEC NAME reach_IDLE := EF state = IDLE;
+CTLSPEC NAME reach_RUNNING := EF state = RUNNING;
+CTLSPEC NAME reach_DONE := EF state = DONE;
+CTLSPEC NAME reach_FAILED := EF state = FAILED;
+CTLSPEC NAME reach_RETRYING := EF state = RETRYING;
+CTLSPEC NAME can_settle := AG EF (state = DONE | state = FAILED | state = IDLE);
 `
     }
 ];

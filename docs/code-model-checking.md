@@ -9,6 +9,9 @@ checks every model. A problem is reported with:
 - a concrete fix;
 - when an LLM is enabled, a patch that the tool re-checks before calling it verified.
 
+It reads TypeScript/JavaScript (with Angular templates), Python, Java, Kotlin, Groovy, Scala, C,
+C++, C#, Go, Rust, Swift, Ruby, PHP and R.
+
 The use it was built for is **checking code written by AI assistants**. That code compiles and
 passes its tests, yet it can still:
 - forget a state in a switch;
@@ -24,6 +27,7 @@ code review is in [the state of the art, section 2.8](state-of-the-art.md#28-che
 
 - [Quick start](#quick-start)
 - [Run it on ProvenFlow yourself](#run-it-on-provenflow-yourself)
+- [Languages](#languages)
 - [What is extracted and checked](#what-is-extracted-and-checked)
 - [How it works](#how-it-works)
 - [What the results mean (soundness)](#what-the-results-mean-soundness)
@@ -94,9 +98,9 @@ npm run check:code                     # = pflow extract . --fail-on warning
 ```
 
 What you should see:
-- about 87 files and 18 models (state machines of the Angular app, resource lifecycles, singleton
-  contracts, the layer graph);
-- about 48 properties checked;
+- about 100 files and 20 models (state machines of the Angular app, resource lifecycles,
+  singleton contracts, the layer graph);
+- about 54 properties checked;
 - **0 errors, 0 warnings**, and around 20 notes (long functions, and states only reachable
   through computed writes).
 
@@ -120,10 +124,50 @@ Then look at the results:
 The same command, `npx pflow extract <dir>`, works on any TypeScript/Python project. Without a
 config it extracts and checks everything that needs no declared intent.
 
+## Languages
+
+| language | files | parsed with | state variables | resources tracked | singletons |
+| --- | --- | --- | --- | --- | --- |
+| TypeScript / JavaScript | `.ts` `.tsx` `.mts` `.cts` | TypeScript compiler + type checker | fields/variables typed as a union of string literals or an enum, `signal<T>`, `BehaviorSubject<T>`; Angular templates included | timers, listeners on window/document/process, EventSource/WebSocket, observers, RxJS subscriptions, child processes, temp dirs, Cytoscape | `@Injectable({ providedIn: 'root' })`, private constructor + static instance |
+| Python | `.py` | Python's `ast` (python3 ≥ 3.10) | attributes set to `Enum` members, `Literal[...]` annotations, `status`/`state`-like attributes set to strings | `open()` outside `with`, temp dirs, `Popen`, locks, subscriptions | `__new__` |
+| Java | `.java` | tree-sitter (v0.23.5) | fields typed with an `enum` | `FileReader`/streams/`Socket` (outside try-with-resources), locks, executors, timers, listeners | private constructor + static instance |
+| Kotlin | `.kt` `.kts` | tree-sitter | properties typed or initialised with an `enum class` | readers/streams (outside `.use {}`), locks, timers/jobs | `object` |
+| Groovy | `.groovy` `.gradle` | tree-sitter (optional semicolons added, lines kept) | fields typed with an `enum` | as Java | `@Singleton` |
+| Scala | `.scala` `.sc` | tree-sitter (v0.26.2) | fields typed with a Scala 3 `enum` or a `sealed trait` of `case object`s | `Source.fromFile`, streams | `object` |
+| C | `.c` `.h` | tree-sitter | globals and struct fields typed with an `enum` (also `typedef enum {...} name_t`) | `malloc`/`free`, `fopen`/`fclose`, sockets, `pthread_mutex_lock` | — |
+| C++ | `.cpp` `.cc` `.hpp` … (`.h` when the project has C++) | tree-sitter | members typed with an `enum`/`enum class` | `new`/`delete`, `malloc`/`free`, `fopen`, `lock()`/`unlock()` | private constructor + static `instance()` |
+| C# | `.cs` | tree-sitter | fields/properties typed with an `enum` | streams (outside `using`), `Timer`, `CancellationTokenSource`, `Monitor` | private constructor + static instance |
+| Go | `.go` | tree-sitter | struct fields typed with a named type whose values are typed constants (`const ( Idle State = iota ... )`) | `os.Open`/`net.Dial` (without `defer Close`), mutexes, tickers/timers, `context.WithCancel` | `sync.Once` + package instance |
+| Rust | `.rs` | tree-sitter | struct fields typed with an `enum` (writes in `impl` blocks, `Job { state: ... }` literals) | explicit leaks only (`Box::leak`, `mem::forget`, `into_raw`): ownership frees the rest | `OnceLock`/`OnceCell`/`Lazy`/`lazy_static!` |
+| Swift | `.swift` | tree-sitter | properties typed or initialised with an `enum` (`.idle`) | `Timer.scheduledTimer`, `addObserver`, file handles | `static let shared` |
+| Ruby | `.rb` | tree-sitter | `@state`-like instance variables set to symbols/strings (values from assignments and `case`/`when`) | `File.open` without a block, sockets, mutexes | `include Singleton` |
+| PHP | `.php` | tree-sitter | properties typed with a PHP 8.1 `enum` | `fopen`/`fclose`, `curl_init`, `flock` | private `__construct` + static instance |
+| R | `.R` `.r` | tree-sitter (r-lib v1.3.0) | R6 / Reference class fields set to strings (`self$state <- "running"`, `switch(self$state, ...)`) | `file()`/`url()`/`dbConnect()` without `on.exit(close(...))`, `sink`, graphics devices | — |
+
+What is the same for every language:
+- conditions (`if`/`else`, `unless`, `guard`, early returns), `switch`/`when`/`match`/`case`/`switch()`
+  labels, and earlier writes in the same function give the states a write can happen in;
+- class and method shape feeds the design-pattern checks: fluent `return this`/`self`, forwarding,
+  "not implemented" bodies, observer collections;
+- functions feed the paradigm rules: argument mutation, outer writes, effects, lambdas;
+- imports feed the architecture checks. Java/Kotlin/Groovy/Scala package paths, C/C++
+  `#include "..."`, Rust `use crate::`/`mod`, Go import paths, Ruby `require_relative`, PHP
+  namespaces and R `source()` are resolved to project files.
+
+In languages without exceptions (C, Go), a release is "not guaranteed" only when an early
+`return` can skip it. The failure check right after the acquisition (`if (p == NULL) return`,
+`if err != nil { return }`) is not counted.
+
+Limits:
+- **Types.** Only TypeScript is read with a type checker. In the other languages a field's type is
+  what is written in its declaration, or the enum its values belong to. A field whose type is
+  inferred from a function call is not recognised.
+- **Grammars.** Grammars are best effort for very new syntax. For example, Kotlin's grammar comes
+  from `tree-sitter-wasms` 0.1.13. Syntax errors stay local to the construct that has them.
+
 ## What is extracted and checked
 
-Languages: TypeScript and JavaScript (with the type checker), Angular templates, and Python 3.10+
-(with Python's own `ast` module).
+See [Languages](#languages) for how each of the 15 languages is read.
 
 ### State machines
 

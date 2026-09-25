@@ -49,8 +49,8 @@ export interface CodeReport {
 }
 
 /** What the analysis reads: sources, Angular templates, and the files that describe the project. */
-const WANTED = /(\.(ts|tsx|mts|cts|py|html)|(^|\/)(package\.json|provenflow\.config\.json))$/;
-const SKIPPED_DIR = /(^|\/)(node_modules|\.git|dist|out|build|\.angular|\.venv|venv|__pycache__|\.provenflow|coverage)\//;
+const WANTED = /(\.(ts|tsx|mts|cts|py|html|java|kts?|groovy|gradle|scala|sc|c|h|cpp|cc|cxx|hpp|hh|hxx|cs|go|rs|swift|rb|php|R|r)|(^|\/)(package\.json|provenflow\.config\.json|go\.mod|Cargo\.toml|pom\.xml|build\.gradle(\.kts)?|DESCRIPTION|composer\.json|Gemfile))$/;
+const SKIPPED_DIR = /(^|\/)(node_modules|\.git|dist|out|build|\.angular|\.venv|venv|__pycache__|\.provenflow|coverage|target|bin|obj|vendor|\.gradle|\.idea|renv|Pods|DerivedData)\//;
 const MAX_FILES = 5000;
 const MAX_FILE_BYTES = 1_000_000;
 
@@ -95,7 +95,7 @@ export class CodeImport {
         }
         const count = Object.keys(picked).length;
         if (count === 0) {
-            this.error.set('No TypeScript, JavaScript module or Python files in that folder.');
+            this.error.set('No source files of a supported language in that folder (TypeScript, Python, Java, Kotlin, Groovy, Scala, C, C++, C#, Go, Rust, Swift, Ruby, PHP, R).');
             return;
         }
         const folder = files[0].webkitRelativePath.split('/')[0] || 'folder';

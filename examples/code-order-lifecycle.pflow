@@ -1,0 +1,53 @@
+// Extracted from a code base by pflow extract (File -> Import code base...).
+// Source: packages/extract/test/fixtures/shop/src/core/order.ts (TypeScript)
+//
+//   export type OrderStatus = 'draft' | 'submitted' | 'paid' | 'shipped' | 'cancelled' | 'refunded';
+//   export class Order {
+//       status: OrderStatus = 'draft';
+//       submit(): void { if (this.status !== 'draft') return; this.status = 'submitted'; }
+//       async pay(api: PaymentApi): Promise<void> {
+//           if (this.status !== 'submitted') return;
+//           await api.charge(10);          // cancel() can run while the charge is pending
+//           this.status = 'paid';
+//       }
+//       cancel(): void { if (this.status === 'shipped') throw new Error('already shipped'); this.status = 'cancelled'; }
+//       ship(): void { if (this.status === 'paid') this.status = 'shipped'; }
+//       isRefunded(): boolean { return this.status === 'refunded'; }
+//   }
+//
+// Every transition is an assignment of 'status'; the states it can start from come from the
+// conditions and early returns around it. pay() writes after an await without re-checking, so
+// it can move any state to 'paid'. Check it: 'refunded' is never set (isRefunded() is dead code),
+// and "once cancelled, never shipped" is false: the counterexample is cancel -> pay -> ship.
+// Fix in the code: re-check the status after the await (if (this.status !== 'submitted') return;).
+
+diagram Order_status
+
+initial state draft
+state submitted
+state paid
+state shipped
+state cancelled
+state refunded
+
+draft -> submitted : "Order.submit";
+draft -> paid : "Order.pay";
+submitted -> paid : "Order.pay";
+shipped -> paid : "Order.pay";
+cancelled -> paid : "Order.pay";
+refunded -> paid : "Order.pay";
+draft -> cancelled : "Order.cancel";
+submitted -> cancelled : "Order.cancel";
+paid -> cancelled : "Order.cancel";
+cancelled -> cancelled : "Order.cancel";
+refunded -> cancelled : "Order.cancel";
+paid -> shipped : "Order.ship";
+
+CTLSPEC NAME reach_draft := EF state = draft;
+CTLSPEC NAME reach_submitted := EF state = submitted;
+CTLSPEC NAME reach_paid := EF state = paid;
+CTLSPEC NAME reach_shipped := EF state = shipped;
+CTLSPEC NAME reach_cancelled := EF state = cancelled;
+CTLSPEC NAME reach_refunded := EF state = refunded;
+CTLSPEC NAME can_settle := AG EF (state = shipped | state = cancelled | state = refunded | state = draft);
+CTLSPEC NAME config_1 := AG (state = cancelled -> AG state != shipped);

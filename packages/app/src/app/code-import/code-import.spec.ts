@@ -27,10 +27,14 @@ describe('CodeImport', () => {
                 file('shop/node_modules/lib/index.ts'),
                 file('shop/dist/main.js'),
                 file('shop/src/types.d.ts'),
-                file('shop/README.md')
+                file('shop/README.md'),
+                file('shop/core/Job.java'),
+                file('shop/core/target/Job.class'),
+                file('shop/lib/job.rs'),
+                file('shop/R/job.R')
             ];
             await service.analyseFolder(files as unknown as FileList);
-            expect(Object.keys(sent!.files).sort()).toEqual(['jobs/jobs.py', 'package.json', 'provenflow.config.json', 'src/order.html', 'src/order.ts']);
+            expect(Object.keys(sent!.files).sort()).toEqual(['R/job.R', 'core/Job.java', 'jobs/jobs.py', 'lib/job.rs', 'package.json', 'provenflow.config.json', 'src/order.html', 'src/order.ts']);
             expect(sent!.files['src/order.ts']).toBe('export class Order {}');
             expect(service.report()?.root).toBe('shop');
         } finally {
@@ -41,6 +45,6 @@ describe('CodeImport', () => {
     it('reports a folder without sources', async () => {
         const service = TestBed.inject(CodeImport);
         await service.analyseFolder([file('docs/readme.md')] as unknown as FileList);
-        expect(service.error()).toContain('No TypeScript');
+        expect(service.error()).toContain('No source files');
     });
 });

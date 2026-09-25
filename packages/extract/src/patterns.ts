@@ -64,9 +64,13 @@ function singletons(facts: Facts, classes: ClassFact[], result: PatternResult, m
     for (const c of classes) {
         const staticSelf = c.fields.some(f => f.static && (f.type === c.name || /instance/i.test(f.name)));
         const accessor = c.methods.find(m => m.static && /^(getInstance|instance|get|shared|default)$/i.test(m.name));
-        const classic = (c.privateConstructor || c.overridesNew) && (staticSelf || !!accessor);
+        const classic = ((c.privateConstructor || c.overridesNew) && (staticSelf || !!accessor)) || !!c.declaredSingleton;
         if (!c.providedInRoot && !classic) continue;
-        const how = c.providedInRoot ? "@Injectable({ providedIn: 'root' }): one instance per application, obtained with inject()" : `${c.overridesNew ? '__new__' : 'private constructor'} with ${accessor ? `${accessor.name}()` : 'a static instance'}`;
+        const how = c.providedInRoot
+            ? "@Injectable({ providedIn: 'root' }): one instance per application, obtained with inject()"
+            : c.declaredSingleton
+              ? 'declared as a single instance by the language (object / Singleton / shared instance)'
+              : `${c.overridesNew ? '__new__' : 'private constructor'} with ${accessor ? `${accessor.name}()` : 'a static instance'}`;
         const id = modelId(`pattern-singleton-${c.name}`);
         const b = new ModelBuilder(id, 'pattern', `${c.name} (singleton)`, c.loc);
         b.state('none', true);
@@ -75,13 +79,13 @@ function singletons(facts: Facts, classes: ClassFact[], result: PatternResult, m
         const obtain = c.providedInRoot ? `inject(${c.name})` : `${c.name}.${accessor?.name ?? 'instance'}`;
         b.transition('none', 'one', { event: obtain, loc: accessor?.loc ?? c.loc });
         b.transition('one', 'one', { event: obtain, loc: accessor?.loc ?? c.loc });
-        const bypasses = facts.instantiations.filter(n => n.className === c.name && !n.inTest && n.inClass !== c.name);
+        const bypasses = facts.instantiations.filter(n => n.className === c.name && !n.inTest && n.inClass !== c.name && (!n.language || n.language === c.language));
         for (const n of bypasses) {
             b.transition('none', 'one', { event: `new ${c.name}`, loc: n.loc });
             b.transition('one', 'many', { event: `new ${c.name}`, loc: n.loc });
         }
         // Classic singleton: the accessor must create lazily or eagerly, but only once.
-        if (classic && accessor && !c.methods.some(m => m.name === accessor.name && m.validates) && !c.fields.some(f => f.static)) {
+        if (classic && !c.declaredSingleton && accessor && !c.methods.some(m => m.name === accessor.name && m.validates) && !c.fields.some(f => f.static)) {
             b.transition('one', 'many', { event: `${c.name}.${accessor.name} (no stored instance)`, loc: accessor.loc });
         }
         b.spec('INVARSPEC', 'single_instance', '!(state = many)', {
