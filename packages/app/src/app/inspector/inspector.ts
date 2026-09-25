@@ -73,6 +73,43 @@ export class Inspector {
         });
     }
 
+    setGuard(index: number, text: string): void {
+        this.store.update(m => {
+            const t = m.transitions[index];
+            if (!t) return;
+            if (text.trim()) t.guard = text.trim();
+            else delete t.guard;
+        });
+    }
+
+    updatesText(index: number): string {
+        return (this.store.model().transitions[index]?.updates ?? []).map(u => `${u.variable} := ${u.expression}`).join(', ');
+    }
+
+    setUpdates(index: number, text: string): void {
+        const updates = text
+            .split(',')
+            .map(part => part.split(':='))
+            .filter(p => p.length === 2 && p[0].trim() && p[1].trim())
+            .map(([variable, expression]) => ({ variable: variable.trim(), expression: expression.trim() }));
+        this.store.update(m => {
+            const t = m.transitions[index];
+            if (!t) return;
+            if (updates.length > 0) t.updates = updates;
+            else delete t.updates;
+        });
+    }
+
+    setProbability(index: number, text: string): void {
+        const p = Number(text);
+        this.store.update(m => {
+            const t = m.transitions[index];
+            if (!t) return;
+            if (text.trim() && Number.isFinite(p)) t.probability = p;
+            else delete t.probability;
+        });
+    }
+
     reverse(index: number): void {
         this.store.update(m => {
             const t = m.transitions[index];

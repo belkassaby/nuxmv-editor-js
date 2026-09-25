@@ -17,6 +17,13 @@ export function serializeDiagram(model: DiagramModel): string {
         out.push('}');
     }
 
+    if (model.variables.length > 0) {
+        out.push('', 'variables {');
+        const width = Math.max(...model.variables.map(v => v.name.length));
+        for (const v of model.variables) out.push(`  ${v.name.padEnd(width)} : ${attributeTypeToString(v.type)} := ${v.initial};`);
+        out.push('}');
+    }
+
     if (model.states.length > 0) {
         out.push('');
         for (const state of model.states) out.push(serializeState(state, model));
@@ -25,7 +32,11 @@ export function serializeDiagram(model: DiagramModel): string {
     if (model.transitions.length > 0) {
         out.push('');
         for (const t of model.transitions) {
-            out.push(`${t.source} -> ${t.target}${t.label ? ` : ${quote(t.label)}` : ''};`);
+            let line = `${t.source} -> ${t.target}${t.label ? ` : ${quote(t.label)}` : ''}`;
+            if (t.guard) line += ` when ${t.guard}`;
+            if (t.updates && t.updates.length > 0) line += ` do ${t.updates.map(u => `${u.variable} := ${u.expression}`).join(', ')}`;
+            if (t.probability !== undefined) line += ` prob ${t.probability}`;
+            out.push(line + ';');
         }
     }
 

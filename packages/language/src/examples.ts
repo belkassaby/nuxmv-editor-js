@@ -273,6 +273,47 @@ CTLSPEC NAME no_dead_ends := AG EX TRUE;
 `
     },
     {
+        id: 'agent-retry-data',
+        title: 'Retry budget with data (guards)',
+        group: 'Agentic AI patterns',
+        description: 'The retry budget as a bounded variable with guards and updates instead of unrolled states; transitions carry probabilities for the probabilistic analysis.',
+        expected: ['true', 'true', 'true', 'true', 'false'],
+        source: `// Guards and bounded data: a retry budget kept in a variable instead of being
+// unrolled into states. The tests may fail at most twice before escalation.
+diagram RetryBudget
+
+attributes {
+  phase : { working, testing, reviewing, done, escalated };
+}
+
+variables {
+  retries  : 0..3 := 0;
+  approved : boolean := FALSE;
+}
+
+initial state work "agent codes" { phase = working } at (100, 200)
+state test "tests run" { phase = testing } at (340, 200)
+state review "human review" { phase = reviewing } at (580, 120)
+state done "merged" { phase = done } at (820, 120)
+state human "escalated to human" { phase = escalated } at (580, 330)
+
+work -> test : "code_written";
+test -> work : "tests_failed" when retries < 2 do retries := retries + 1 prob 0.3;
+test -> human : "escalate" when retries = 2 prob 0.2;
+test -> review : "tests_passed" prob 0.5;
+review -> done : "approve" do approved := TRUE prob 0.7;
+review -> work : "reject" do retries := 0 prob 0.3;
+human -> work : "reset" do retries := 0;
+done -> done;
+
+INVARSPEC NAME budget := retries <= 2;
+LTLSPEC NAME approval_only_when_merged := G (approved -> phase = done);
+LTLSPEC NAME merged_needs_approval := G (phase = done -> approved);
+CTLSPEC NAME can_merge := AG EF phase = done;
+LTLSPEC NAME always_merges := F phase = done;
+`
+    },
+    {
         id: 'agent-tool-approval',
         title: 'Human-in-the-loop tool approval',
         group: 'Agentic AI patterns',

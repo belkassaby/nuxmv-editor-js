@@ -40,7 +40,7 @@ export class TracePanel implements OnDestroy {
     readonly simulationRows = computed(() => {
         const path = this.store.simulation() ?? [];
         const model = this.store.model();
-        return path.map(name => ({ name, state: model.states.find(s => s.name === name) }));
+        return path.map(c => ({ name: c.state, state: model.states.find(s => s.name === c.state), variables: c.variables }));
     });
 
     toggle(): void {
@@ -59,6 +59,10 @@ export class TracePanel implements OnDestroy {
     stop(): void {
         clearInterval(this.timer);
         this.playing.set(false);
+    }
+
+    fmt(value: unknown): string {
+        return value === true ? 'TRUE' : value === false ? 'FALSE' : value === undefined ? '?' : String(value);
     }
 
     close(): void {

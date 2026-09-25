@@ -9,6 +9,7 @@ import * as langium from 'langium';
 export const StateDiagramTerminals = {
     WS: /\s+/,
     ID: /[_a-zA-Z][\w$#]*/,
+    DECIMAL: /[0-9]+\.[0-9]+/,
     INT: /[0-9]+/,
     STRING: /"(\\.|[^"\\])*"/,
     ML_COMMENT: /\/\*[\s\S]*?\*\//,
@@ -72,9 +73,13 @@ export type StateDiagramKeywordNames =
     | "attributes"
     | "boolean"
     | "diagram"
+    | "do"
     | "initial"
     | "mod"
+    | "prob"
     | "state"
+    | "variables"
+    | "when"
     | "xnor"
     | "xor"
     | "{"
@@ -153,7 +158,7 @@ export function isAttributeValue(item: unknown): item is AttributeValue {
 }
 
 export interface BinaryExpression extends langium.AstNode {
-    readonly $container: BinaryExpression | Fairness | PathQuantifiedExpression | Specification | UnaryExpression;
+    readonly $container: BinaryExpression | Fairness | PathQuantifiedExpression | Specification | Transition | UnaryExpression | Update;
     readonly $type: 'BinaryExpression';
     left: Expression;
     operator: '!=' | '&' | '*' | '+' | '-' | '->' | '/' | '<' | '<->' | '<=' | '=' | '>' | '>=' | 'S' | 'T' | 'U' | 'V' | 'mod' | 'xnor' | 'xor' | '|';
@@ -172,7 +177,7 @@ export function isBinaryExpression(item: unknown): item is BinaryExpression {
 }
 
 export interface BooleanLiteral extends langium.AstNode {
-    readonly $container: BinaryExpression | Fairness | PathQuantifiedExpression | Specification | UnaryExpression;
+    readonly $container: BinaryExpression | Fairness | PathQuantifiedExpression | Specification | Transition | UnaryExpression | Update;
     readonly $type: 'BooleanLiteral';
     value: 'FALSE' | 'TRUE';
 }
@@ -187,7 +192,7 @@ export function isBooleanLiteral(item: unknown): item is BooleanLiteral {
 }
 
 export interface BooleanType extends langium.AstNode {
-    readonly $container: Attribute;
+    readonly $container: Attribute | Variable;
     readonly $type: 'BooleanType';
 }
 
@@ -200,7 +205,7 @@ export function isBooleanType(item: unknown): item is BooleanType {
 }
 
 export interface BooleanValue extends langium.AstNode {
-    readonly $container: Assignment;
+    readonly $container: Assignment | Variable;
     readonly $type: 'BooleanValue';
     value: 'FALSE' | 'TRUE';
 }
@@ -236,7 +241,7 @@ export function isDiagramName(item: unknown): item is DiagramName {
     return item === 'G' || item === 'F' || item === 'X' || item === 'U' || item === 'V' || item === 'Y' || item === 'Z' || item === 'H' || item === 'O' || item === 'S' || item === 'T' || item === 'A' || item === 'E' || (typeof item === 'string' && (/[_a-zA-Z][\w$#]*/.test(item)));
 }
 
-export type Element = AttributeBlock | Fairness | Specification | State | Transition;
+export type Element = AttributeBlock | Fairness | Specification | State | Transition | VariableBlock;
 
 export const Element = {
     $type: 'Element'
@@ -247,7 +252,7 @@ export function isElement(item: unknown): item is Element {
 }
 
 export interface EnumType extends langium.AstNode {
-    readonly $container: Attribute;
+    readonly $container: Attribute | Variable;
     readonly $type: 'EnumType';
     values: Array<EnumValue>;
 }
@@ -304,7 +309,7 @@ export function isFairness(item: unknown): item is Fairness {
 }
 
 export interface IntegerValue extends langium.AstNode {
-    readonly $container: Assignment;
+    readonly $container: Assignment | Variable;
     readonly $type: 'IntegerValue';
     value: SignedInt;
 }
@@ -319,7 +324,7 @@ export function isIntegerValue(item: unknown): item is IntegerValue {
 }
 
 export interface NameReference extends langium.AstNode {
-    readonly $container: BinaryExpression | Fairness | PathQuantifiedExpression | Specification | UnaryExpression;
+    readonly $container: BinaryExpression | Fairness | PathQuantifiedExpression | Specification | Transition | UnaryExpression | Update;
     readonly $type: 'NameReference';
     name: string;
 }
@@ -334,7 +339,7 @@ export function isNameReference(item: unknown): item is NameReference {
 }
 
 export interface NumberLiteral extends langium.AstNode {
-    readonly $container: BinaryExpression | Fairness | PathQuantifiedExpression | Specification | UnaryExpression;
+    readonly $container: BinaryExpression | Fairness | PathQuantifiedExpression | Specification | Transition | UnaryExpression | Update;
     readonly $type: 'NumberLiteral';
     value: number;
 }
@@ -349,7 +354,7 @@ export function isNumberLiteral(item: unknown): item is NumberLiteral {
 }
 
 export interface PathQuantifiedExpression extends langium.AstNode {
-    readonly $container: BinaryExpression | Fairness | PathQuantifiedExpression | Specification | UnaryExpression;
+    readonly $container: BinaryExpression | Fairness | PathQuantifiedExpression | Specification | Transition | UnaryExpression | Update;
     readonly $type: 'PathQuantifiedExpression';
     body: Expression;
     quantifier: 'A' | 'E';
@@ -365,8 +370,14 @@ export function isPathQuantifiedExpression(item: unknown): item is PathQuantifie
     return reflection.isInstance(item, PathQuantifiedExpression.$type);
 }
 
+export type Probability = number;
+
+export function isProbability(item: unknown): item is Probability {
+    return typeof item === 'number';
+}
+
 export interface RangeType extends langium.AstNode {
-    readonly $container: Attribute;
+    readonly $container: Attribute | Variable;
     readonly $type: 'RangeType';
     high: SignedInt;
     low: SignedInt;
@@ -433,7 +444,7 @@ export function isState(item: unknown): item is State {
 }
 
 export interface StateVariable extends langium.AstNode {
-    readonly $container: BinaryExpression | Fairness | PathQuantifiedExpression | Specification | UnaryExpression;
+    readonly $container: BinaryExpression | Fairness | PathQuantifiedExpression | Specification | Transition | UnaryExpression | Update;
     readonly $type: 'StateVariable';
 }
 
@@ -446,7 +457,7 @@ export function isStateVariable(item: unknown): item is StateVariable {
 }
 
 export interface SymbolValue extends langium.AstNode {
-    readonly $container: Assignment;
+    readonly $container: Assignment | Variable;
     readonly $type: 'SymbolValue';
     symbol: string;
 }
@@ -469,16 +480,22 @@ export function isTemporalOperator(item: unknown): item is TemporalOperator {
 export interface Transition extends langium.AstNode {
     readonly $container: Diagram;
     readonly $type: 'Transition';
+    guard?: Expression;
     label?: string;
+    probability?: Probability;
     source: langium.Reference<State>;
     target: langium.Reference<State>;
+    updates: Array<Update>;
 }
 
 export const Transition = {
     $type: 'Transition',
+    guard: 'guard',
     label: 'label',
+    probability: 'probability',
     source: 'source',
-    target: 'target'
+    target: 'target',
+    updates: 'updates'
 } as const;
 
 export function isTransition(item: unknown): item is Transition {
@@ -486,7 +503,7 @@ export function isTransition(item: unknown): item is Transition {
 }
 
 export interface UnaryExpression extends langium.AstNode {
-    readonly $container: BinaryExpression | Fairness | PathQuantifiedExpression | Specification | UnaryExpression;
+    readonly $container: BinaryExpression | Fairness | PathQuantifiedExpression | Specification | Transition | UnaryExpression | Update;
     readonly $type: 'UnaryExpression';
     operand: Expression;
     operator: '!' | '-' | TemporalOperator;
@@ -500,6 +517,57 @@ export const UnaryExpression = {
 
 export function isUnaryExpression(item: unknown): item is UnaryExpression {
     return reflection.isInstance(item, UnaryExpression.$type);
+}
+
+export interface Update extends langium.AstNode {
+    readonly $container: Transition;
+    readonly $type: 'Update';
+    value: Expression;
+    variable: langium.Reference<Variable>;
+}
+
+export const Update = {
+    $type: 'Update',
+    value: 'value',
+    variable: 'variable'
+} as const;
+
+export function isUpdate(item: unknown): item is Update {
+    return reflection.isInstance(item, Update.$type);
+}
+
+export interface Variable extends langium.AstNode {
+    readonly $container: VariableBlock;
+    readonly $type: 'Variable';
+    initial: AttributeValue;
+    name: string;
+    type: AttributeType;
+}
+
+export const Variable = {
+    $type: 'Variable',
+    initial: 'initial',
+    name: 'name',
+    type: 'type'
+} as const;
+
+export function isVariable(item: unknown): item is Variable {
+    return reflection.isInstance(item, Variable.$type);
+}
+
+export interface VariableBlock extends langium.AstNode {
+    readonly $container: Diagram;
+    readonly $type: 'VariableBlock';
+    variables: Array<Variable>;
+}
+
+export const VariableBlock = {
+    $type: 'VariableBlock',
+    variables: 'variables'
+} as const;
+
+export function isVariableBlock(item: unknown): item is VariableBlock {
+    return reflection.isInstance(item, VariableBlock.$type);
 }
 
 export type StateDiagramAstType = {
@@ -529,6 +597,9 @@ export type StateDiagramAstType = {
     SymbolValue: SymbolValue
     Transition: Transition
     UnaryExpression: UnaryExpression
+    Update: Update
+    Variable: Variable
+    VariableBlock: VariableBlock
 }
 
 export class StateDiagramAstReflection extends langium.AbstractAstReflection {
@@ -794,8 +865,16 @@ export class StateDiagramAstReflection extends langium.AbstractAstReflection {
         Transition: {
             name: Transition.$type,
             properties: {
+                guard: {
+                    name: Transition.guard,
+                    optional: true
+                },
                 label: {
                     name: Transition.label,
+                    optional: true
+                },
+                probability: {
+                    name: Transition.probability,
                     optional: true
                 },
                 source: {
@@ -805,6 +884,11 @@ export class StateDiagramAstReflection extends langium.AbstractAstReflection {
                 target: {
                     name: Transition.target,
                     referenceType: State.$type
+                },
+                updates: {
+                    name: Transition.updates,
+                    defaultValue: [],
+                    optional: true
                 }
             },
             superTypes: [Element.$type]
@@ -820,6 +904,45 @@ export class StateDiagramAstReflection extends langium.AbstractAstReflection {
                 }
             },
             superTypes: [Expression.$type]
+        },
+        Update: {
+            name: Update.$type,
+            properties: {
+                value: {
+                    name: Update.value
+                },
+                variable: {
+                    name: Update.variable,
+                    referenceType: Variable.$type
+                }
+            },
+            superTypes: []
+        },
+        Variable: {
+            name: Variable.$type,
+            properties: {
+                initial: {
+                    name: Variable.initial
+                },
+                name: {
+                    name: Variable.name
+                },
+                type: {
+                    name: Variable.type
+                }
+            },
+            superTypes: []
+        },
+        VariableBlock: {
+            name: VariableBlock.$type,
+            properties: {
+                variables: {
+                    name: VariableBlock.variables,
+                    defaultValue: [],
+                    optional: true
+                }
+            },
+            superTypes: [Element.$type]
         }
     } as const satisfies langium.AstMetaData
 }

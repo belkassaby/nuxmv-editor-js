@@ -10,7 +10,7 @@
     },
     {
       "name": "keyword.control.state-diagram",
-      "match": "\\b(attributes|INVARSPEC|FAIRNESS|boolean|CTLSPEC|diagram|initial|JUSTICE|LTLSPEC|FALSE|state|NAME|TRUE|xnor|mod|xor|AF|AG|at|AX|EF|EG|EX|A|E|F|G|H|O|S|T|U|V|X|Y|Z)\\b"
+      "match": "\\b(attributes|INVARSPEC|variables|FAIRNESS|boolean|CTLSPEC|diagram|initial|JUSTICE|LTLSPEC|FALSE|state|NAME|prob|TRUE|when|xnor|mod|xor|AF|AG|at|AX|do|EF|EG|EX|A|E|F|G|H|O|S|T|U|V|X|Y|Z)\\b"
     },
     {
       "name": "string.quoted.double.state-diagram",

@@ -43,6 +43,7 @@ describe('parser', () => {
                 { name: 'n', type: { kind: 'range', low: 0, high: 3 } },
                 { name: 'e', type: { kind: 'enum', values: ['x', 'y'] } }
             ],
+            variables: [],
             states: [
                 { name: 's0', label: 'start', initial: true, values: { a: 'TRUE', n: '2', e: 'y' }, position: { x: 10, y: -20 } },
                 { name: 's1', initial: false, values: {} }
@@ -129,6 +130,45 @@ describe('validator', () => {
         expect(warnings.join('\n')).toMatch(/'s1' is a dead end/);
         expect(warnings.join('\n')).toMatch(/Duplicate transition/);
         expect(await messages('state s0\nstate s0\ns0 -> s0;')).toEqual(['Duplicate state \'s0\'.']);
+    });
+});
+
+describe('guards and data', () => {
+    const source = EXAMPLES.find(e => e.id === 'agent-retry-data')!.source;
+
+    it('parses variables, guards, updates and probabilities', async () => {
+        const { model } = await parseDiagram(source);
+        expect(model.variables).toEqual([
+            { name: 'retries', type: { kind: 'range', low: 0, high: 3 }, initial: '0' },
+            { name: 'approved', type: { kind: 'boolean' }, initial: 'FALSE' }
+        ]);
+        const failed = model.transitions.find(t => t.label === 'tests_failed')!;
+        expect(failed.guard).toBe('retries < 2');
+        expect(failed.updates).toEqual([{ variable: 'retries', expression: 'retries + 1' }]);
+        expect(failed.probability).toBe(0.3);
+    });
+
+    it('encodes the transition relation with TRANS', async () => {
+        const { model } = await parseDiagram(source);
+        const { text } = generateSmv(model);
+        expect(text).toContain('init(retries) := 0;');
+        expect(text).toContain('retries : 0..3;');
+        expect(text).toMatch(/TRANS\n/);
+        expect(text).toContain('(state = test & (retries < 2) & (retries + 1) >= 0 & (retries + 1) <= 3 & next(state) = work & next(retries) = (retries + 1) & next(approved) = approved)');
+        expect(text).toContain('nothing enabled: stutter');
+        expect(text).not.toContain('next(state) := case');
+    });
+
+    it('validates guards, updates, initial values and probabilities', async () => {
+        const errs = async (t: string) => (await parseDiagram(t)).diagnostics.filter(d => d.severity === 'error').map(d => d.message);
+        const base = 'variables { n : 0..2 := 0; }\ninitial state a\n';
+        expect(await errs(base + 'a -> a when G n > 0;')).toEqual([expect.stringMatching(/guard must be a condition/i)]);
+        expect(await errs(base + 'a -> a do m := 1;')).toHaveLength(1);
+        expect(await errs(base + 'a -> a do n := n + 1, n := 0;')).toEqual([expect.stringMatching(/updated twice/)]);
+        expect(await errs(base + 'a -> a prob 1.5;')).toEqual([expect.stringMatching(/probability/)]);
+        expect(await errs('variables { n : 0..2 := 5; }\ninitial state a\na -> a;')).toEqual([expect.stringMatching(/outside 0..2/)]);
+        const warnings = (await parseDiagram(base + 'state b\na -> a prob 0.5;\na -> b prob 0.2;\nb -> a;')).diagnostics.filter(d => d.severity === 'warning');
+        expect(warnings.map(w => w.message).join()).toMatch(/add up to 0.7/);
     });
 });
 

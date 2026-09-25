@@ -1,4 +1,5 @@
-import type { DiagramModel } from './model.js';
+import { hasData, type DiagramModel } from './model.js';
+import { Semantics, type Configuration } from './semantics.js';
 import { generatePython, type GeneratedPython, type PythonTransition } from './python-generator.js';
 
 export interface NotebookOptions {
@@ -54,7 +55,8 @@ export async function generateNotebook(model: DiagramModel, options: NotebookOpt
     md('## Live diagram\n\nThe widget below follows the state of `fsm`: run the next cells and watch it move (current state in orange, possible next states dotted green).');
     code('try:\n    live = fsm.widget(height=460)\nexcept ImportError as error:\n    live = None\n    print(error)\nlive');
 
-    const path = demoPath(model, g.transitions);
+    const sem = hasData(model) ? await Semantics.of(model) : null;
+    const path = sem ? demoPathWithData(model, g, sem) : demoPath(model, g.transitions);
     md(
         `## Walking through the model\n\n` +
             (path.reaches ? `A shortest path from the initial state to the final state \`${path.reaches}\`.` : 'A walk through the model, visiting new states first.') +
@@ -116,7 +118,7 @@ export async function generateNotebook(model: DiagramModel, options: NotebookOpt
     );
 
     const replays = (options.counterexamples ?? [])
-        .map(c => ({ ...c, events: eventsFor(c.states, g.transitions) }))
+        .map(c => ({ ...c, events: sem ? eventsWithData(c.states, g, sem) : eventsFor(c.states, g.transitions) }))
         .filter(c => c.events !== null);
     if (replays.length > 0) {
         md(
@@ -241,4 +243,55 @@ function pyStr(s: string): string {
 function pyList(items: string[]): string {
     if (items.length <= 4) return `[${items.map(pyStr).join(', ')}]`;
     return '[\n' + items.map(i => `    ${pyStr(i)},`).join('\n') + '\n]';
+}
+
+/** Like demoPath, over configurations (state + variables) so that guards are respected. */
+function demoPathWithData(model: DiagramModel, g: GeneratedPython, sem: Semantics): { events: string[]; states: string[]; reaches?: string } {
+    const eventOf = new Map(g.transitions.map(t => [t.index, t.event]));
+    const finals = new Set(g.terminalStates);
+    const start = sem.initialConfigurations()[0];
+    const key = (c: { state: string; variables: object }) => JSON.stringify(c);
+    const prev = new Map<string, { from: string; event: string; state: string } | null>([[key(start), null]]);
+    const queue = [start];
+    while (queue.length > 0 && prev.size < 20000) {
+        const c = queue.shift()!;
+        const k = key(c);
+        if (finals.has(c.state) && c.state !== start.state) {
+            const events: string[] = [];
+            const states: string[] = [];
+            for (let p = prev.get(k); p; p = prev.get(p.from)) {
+                events.unshift(p.event);
+                states.unshift(p.state);
+            }
+            return { events, states: [start.state, ...states], reaches: c.state };
+        }
+        for (const s of sem.successors(c)) {
+            if (s.transition === null) continue;
+            const event = eventOf.get(s.transition);
+            const nk = key(s.config);
+            if (!event || prev.has(nk)) continue;
+            prev.set(nk, { from: k, event, state: s.config.state });
+            queue.push(s.config);
+        }
+    }
+    return demoPath(model, g.transitions);
+}
+
+function eventsWithData(states: string[], g: GeneratedPython, sem: Semantics): string[] | null {
+    const eventOf = new Map(g.transitions.map(t => [t.index, t.event]));
+    const start = sem.initialConfigurations().find(c => c.state === states[0]);
+    if (!start) return null;
+    let config: Configuration = start;
+    const events: string[] = [];
+    for (let i = 1; i < states.length; i++) {
+        const step: { transition: number | null; config: Configuration } | undefined = sem.successors(config).find(s => s.config.state === states[i]);
+        if (!step) return null;
+        if (step.transition !== null) {
+            const event = eventOf.get(step.transition);
+            if (!event) return null;
+            events.push(event);
+        }
+        config = step.config;
+    }
+    return events;
 }

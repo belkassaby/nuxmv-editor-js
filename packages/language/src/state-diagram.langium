@@ -32,7 +32,7 @@ DiagramName returns string:
     ID | 'G' | 'F' | 'X' | 'U' | 'V' | 'Y' | 'Z' | 'H' | 'O' | 'S' | 'T' | 'A' | 'E';
 
 Element:
-    AttributeBlock | State | Transition | Fairness | Specification;
+    AttributeBlock | VariableBlock | State | Transition | Fairness | Specification;
 
 // ---------------------------------------------------------------------------
 // Attributes (atoms) and their domains
@@ -60,6 +60,18 @@ RangeType:
     low=SignedInt '..' high=SignedInt;
 
 // ---------------------------------------------------------------------------
+// Data variables: bounded counters and flags updated by transitions
+//
+//   variables { retries : 0..3 := 0; approved : boolean := FALSE; }
+// ---------------------------------------------------------------------------
+
+VariableBlock:
+    'variables' '{' (variables+=Variable)* '}';
+
+Variable:
+    name=ID ':' type=AttributeType ':=' initial=AttributeValue ';'?;
+
+// ---------------------------------------------------------------------------
 // States, their labelling and their position on the drawing board
 // ---------------------------------------------------------------------------
 
@@ -81,8 +93,16 @@ AttributeValue:
 // Transitions
 // ---------------------------------------------------------------------------
 
+// s1 -> s2 : "label" when <guard> do v := <expr>, w := <expr> prob 0.8;
 Transition:
-    source=[State:ID] '->' target=[State:ID] (':' label=STRING)? ';'?;
+    source=[State:ID] '->' target=[State:ID] (':' label=STRING)?
+    ('when' guard=Expression)?
+    ('do' updates+=Update (',' updates+=Update)*)?
+    ('prob' probability=Probability)?
+    ';'?;
+
+Update:
+    variable=[Variable:ID] ':=' value=Expression;
 
 // ---------------------------------------------------------------------------
 // Fairness constraints and specifications
@@ -157,8 +177,12 @@ Primary infers Expression:
 SignedInt returns number:
     '-'? INT;
 
+Probability returns number:
+    DECIMAL | INT;
+
 hidden terminal WS: /\s+/;
 terminal ID: /[_a-zA-Z][\w$#]*/;
+terminal DECIMAL returns number: /[0-9]+\.[0-9]+/;
 terminal INT returns number: /[0-9]+/;
 terminal STRING: /"(\\.|[^"\\])*"/;
 

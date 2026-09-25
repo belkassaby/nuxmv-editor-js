@@ -112,6 +112,14 @@ fsm.send(...)   # every transition moves the diagram here</pre>
             }
           </tr>
         }
+        @for (v of store.model().variables; track v.name) {
+          <tr>
+            <th class="mono">{{ v.name }} <span class="muted small">var</span></th>
+            @for (row of simulationRows(); track $index) {
+              <td class="mono" [class.current-col]="$last">{{ fmt(row.variables[v.name]) }}</td>
+            }
+          </tr>
+        }
       </tbody>
     </table>
   </div>

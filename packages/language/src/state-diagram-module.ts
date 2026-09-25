@@ -13,7 +13,7 @@ import {
     type MultiMap,
     type PartialLangiumCoreServices
 } from 'langium';
-import { isAttribute, isDiagram } from './generated/ast.js';
+import { isAttribute, isDiagram, isVariable } from './generated/ast.js';
 import { StateDiagramGeneratedModule, StateDiagramGeneratedSharedModule } from './generated/module.js';
 import { StateDiagramValidator, registerValidationChecks } from './state-diagram-validator.js';
 
@@ -26,12 +26,12 @@ export type StateDiagramAddedServices = {
 export type StateDiagramServices = LangiumCoreServices & StateDiagramAddedServices;
 
 /**
- * Attributes are declared inside an `attributes { ... }` block but are
- * referenced from state assignments, so make them visible document-wide.
+ * Attributes and variables are declared inside blocks but are referenced from
+ * state assignments and transition updates, so make them visible document-wide.
  */
 export class StateDiagramScopeComputation extends DefaultScopeComputation {
     protected override addLocalSymbol(node: AstNode, document: LangiumDocument, symbols: MultiMap<AstNode, AstNodeDescription>): void {
-        if (isAttribute(node)) {
+        if (isAttribute(node) || isVariable(node)) {
             const root = document.parseResult.value;
             if (isDiagram(root) && node.name) {
                 symbols.add(root, this.descriptions.createDescription(node, node.name, document));

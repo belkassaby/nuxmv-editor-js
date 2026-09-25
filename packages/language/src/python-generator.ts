@@ -6,6 +6,8 @@ import { PYTHON_RUNTIME } from './python-runtime.js';
 import { serializeDiagram } from './serializer.js';
 
 export interface PythonTransition {
+    /** Index of the transition in the diagram model. */
+    index: number;
     source: string;
     target: string;
     /** Python Event enum member, e.g. TESTS_PASSED. */
@@ -43,6 +45,8 @@ export async function generatePython(model: DiagramModel, options: { sourceName?
     const parsed = await parseDiagram(serializeDiagram(model));
     const ast: Diagram = parsed.ast;
     const specs = ast.elements.filter(e => e.$type === 'Specification');
+    const astTransitions = ast.elements.filter(e => e.$type === 'Transition');
+    const names = new Set([...model.attributes.map(a => a.name), ...model.variables.map(v => v.name)]);
 
     const name = model.name && model.name.length > 0 ? model.name : 'main';
     const className = pascal(name) + 'FSM';
@@ -55,9 +59,31 @@ export async function generatePython(model: DiagramModel, options: { sourceName?
     const exits = new Map<string, number>();
     for (const t of model.transitions) if (t.source !== t.target) exits.set(t.source, (exits.get(t.source) ?? 0) + 1);
     const terminal = model.states.filter(s => !exits.get(s.name)).map(s => s.name);
-    const live = model.transitions.filter(t => !(t.source === t.target && !t.label && terminal.includes(t.source)));
+    const liveIndex = model.transitions.map((t, i) => i).filter(i => {
+        const t = model.transitions[i];
+        return !(t.source === t.target && !t.label && !t.guard && !t.updates?.length && terminal.includes(t.source));
+    });
+    const live = liveIndex.map(i => model.transitions[i]);
 
-    const transitions = assignEvents(live);
+    const transitions = assignEvents(live).map((t, k) => ({ ...t, index: liveIndex[k] }));
+    // Guards and updates of the live transitions, compiled to Python.
+    const dataDefs: string[] = [];
+    const guardEntries: string[] = [];
+    const updateEntries: string[] = [];
+    transitions.forEach((t, k) => {
+        const node = astTransitions[liveIndex[k]];
+        if (node?.$type !== 'Transition') return;
+        const key = `(State.${stateOf.get(t.source)}, Event.${t.event})`;
+        if (node.guard) {
+            dataDefs.push(`def _guard_${k}(v):\n    return bool(${compilePresent(node.guard, names)})\n\n`);
+            guardEntries.push(`    ${key}: _guard_${k},  # ${live[k].guard}`);
+        }
+        if (node.updates.length > 0) {
+            const body = node.updates.map(u => `${py(u.variable.ref?.name ?? u.variable.$refText)}: ${compilePresent(u.value, names)}`).join(', ');
+            dataDefs.push(`def _update_${k}(v):\n    return {${body}}\n\n`);
+            updateEntries.push(`    ${key}: _update_${k},  # ${(live[k].updates ?? []).map(u => `${u.variable} := ${u.expression}`).join(', ')}`);
+        }
+    });
     const events = [...new Set(transitions.map(t => t.event))];
     const monitors: MonitorInfo[] = [];
     const monitorCode: string[] = [];
@@ -67,7 +93,7 @@ export async function generatePython(model: DiagramModel, options: { sourceName?
         const label = spec.name ?? `${spec.kind.toLowerCase()}_${i + 1}`;
         try {
             if (node?.$type !== 'Specification') throw new Unsupported('not parsed');
-            const m = compileMonitor(node.kind, node.expression, new Set(model.attributes.map(a => a.name)));
+            const m = compileMonitor(node.kind, node.expression, names);
             const fn = `_check_${monitorDefs.length}`;
             monitorDefs.push(
                 [
@@ -140,9 +166,23 @@ export async function generatePython(model: DiagramModel, options: { sourceName?
     }
     lines.push('}');
     lines.push('');
-    lines.push('#: Domains of the attributes.');
+    lines.push('#: Data variables and their initial values.');
+    lines.push(`VARIABLES = {${model.variables.map(v => `${py(v.name)}: ${pyValue(v.initial, v.type.kind)}`).join(', ')}}`);
+    lines.push('');
+    lines.push('');
+    lines.push(...dataDefs);
+    lines.push('#: Guards: the transition is only allowed when its guard holds.');
+    lines.push('GUARDS = {');
+    lines.push(...guardEntries);
+    lines.push('}');
+    lines.push('#: Updates of the data variables performed by transitions.');
+    lines.push('UPDATES = {');
+    lines.push(...updateEntries);
+    lines.push('}');
+    lines.push('');
+    lines.push('#: Domains of the attributes and variables.');
     lines.push('DOMAINS = {');
-    for (const a of model.attributes) {
+    for (const a of [...model.attributes, ...model.variables]) {
         const domain = a.type.kind === 'range' ? `range(${a.type.low}, ${a.type.high + 1})` : `(${attributeDomain(a.type).map(v => pyValue(v, a.type.kind)).join(', ')},)`;
         lines.push(`    ${py(a.name)}: ${domain},`);
     }
@@ -162,7 +202,13 @@ export async function generatePython(model: DiagramModel, options: { sourceName?
     lines.push(`DIAGRAM = ${pyLiteral({
         name,
         states: model.states.map(s => ({ name: s.name, label: s.label ?? null, initial: s.initial, x: s.position?.x ?? null, y: s.position?.y ?? null })),
-        transitions: live.map(t => ({ source: t.source, target: t.target, label: t.label ?? null }))
+        transitions: live.map(t => ({
+            source: t.source,
+            target: t.target,
+            label: [t.label, t.guard ? `[${t.guard}]` : '', t.updates?.length ? `/ ${t.updates.map(u => `${u.variable} := ${u.expression}`).join(', ')}` : '']
+                .filter(Boolean)
+                .join(' ') || null
+        }))
     })}`);
     lines.push(PYTHON_RUNTIME);
     lines.push('');
@@ -180,8 +226,8 @@ export async function generatePython(model: DiagramModel, options: { sourceName?
 }
 
 /** Events of the runtime, one per transition: from its label, or TO_<TARGET> when unlabelled. */
-function assignEvents(transitions: DiagramModel['transitions']): PythonTransition[] {
-    const result: PythonTransition[] = transitions.map(t => ({
+function assignEvents(transitions: DiagramModel['transitions']): Array<Omit<PythonTransition, 'index'>> {
+    const result: Array<Omit<PythonTransition, 'index'>> = transitions.map(t => ({
         source: t.source,
         target: t.target,
         event: t.label ? upperSnake(t.label) : `TO_${upperSnake(t.target)}`,
@@ -215,7 +261,19 @@ function compileMonitor(kind: string, expression: Expression, attributes: Set<st
     else if (kind === 'LTLSPEC' && isUnaryExpression(expression) && expression.operator === 'G') body = expression.operand;
     else if (kind === 'CTLSPEC') throw new Unsupported('CTL quantifies over all possible futures');
     else throw new Unsupported('not of the form G(present/past formula)');
+    const c = compileExpression(body, attributes);
+    return { statements: c.statements, verdict: c.value, slots: c.inits.length, inits: c.inits };
+}
 
+/** A guard or update: an expression over the current state only. */
+function compilePresent(expression: Expression, names: Set<string>): string {
+    const c = compileExpression(expression, names);
+    if (c.inits.length > 0) throw new Error('Guards and updates cannot use past-time operators.');
+    return c.value;
+}
+
+/** Python code for an expression; past operators add slot statements. */
+function compileExpression(body: Expression, attributes: Set<string>): { statements: string[]; value: string; inits: boolean[] } {
     const inits: boolean[] = [];
     const parts: string[] = [];
     const slot = (init: boolean, make: (self: number) => string): number => {
@@ -286,8 +344,8 @@ function compileMonitor(kind: string, expression: Expression, attributes: Set<st
         }
         throw new Unsupported('unsupported expression');
     };
-    const verdict = compile(body);
-    return { statements: parts, verdict, slots: inits.length, inits };
+    const value = compile(body);
+    return { statements: parts, value, inits };
 }
 
 // ---------------------------------------------------------------------------

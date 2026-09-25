@@ -1,4 +1,4 @@
-import { attributeDomain, deadEndStates, successors, type DiagramModel } from './model.js';
+import { attributeDomain, deadEndStates, hasData, successors, type DiagramModel, type TransitionDef } from './model.js';
 
 export interface GeneratedModel {
     /** The nuXmv input file. */
@@ -36,11 +36,12 @@ export function generateSmv(model: DiagramModel): GeneratedModel {
     // ----- VAR ------------------------------------------------------------
     lines.push('VAR');
     lines.push(`${indent}state : {${states.join(', ')}};`);
-    for (const attribute of model.attributes) {
+    for (const attribute of [...model.attributes, ...model.variables]) {
         const type = attribute.type;
         const decl = type.kind === 'boolean' ? 'boolean' : type.kind === 'range' ? `${type.low}..${type.high}` : `{${type.values.join(', ')}}`;
         lines.push(`${indent}${attribute.name} : ${decl};`);
     }
+    const data = hasData(model);
 
     // ----- ASSIGN: initial states and transition relation -------------------
     lines.push('ASSIGN');
@@ -51,8 +52,13 @@ export function generateSmv(model: DiagramModel): GeneratedModel {
         notes.push(`No initial state declared, using '${states[0]}'.`);
     }
     lines.push(`${indent}init(state) := ${setOrValue(initials)};`);
+    for (const v of model.variables) lines.push(`${indent}init(${v.name}) := ${v.initial};`);
 
     const deadEnds = new Set(deadEndStates(model));
+    if (data) {
+        // Guards and updates: the transition relation is given below as TRANS.
+        if (deadEnds.size > 0) notes.push(`Dead-end state(s) ${[...deadEnds].join(', ')} loop on themselves.`);
+    } else {
     lines.push(`${indent}next(state) := case`);
     for (const state of states) {
         if (deadEnds.has(state)) {
@@ -66,6 +72,7 @@ export function generateSmv(model: DiagramModel): GeneratedModel {
     lines.push(`${indent}esac;`);
     if (deadEnds.size > 0) {
         notes.push(`Dead-end state(s) ${[...deadEnds].join(', ')} loop on themselves.`);
+    }
     }
 
     // ----- ASSIGN: labelling function L(s) ----------------------------------
@@ -96,6 +103,8 @@ export function generateSmv(model: DiagramModel): GeneratedModel {
         lines.push(`${indent}esac;`);
     }
 
+    if (data) lines.push(...transRelation(model, indent));
+
     // ----- Fairness and specifications ---------------------------------------
     for (const f of model.fairness) {
         lines.push(`${f.kind}`, `${indent}${f.expression};`);
@@ -109,4 +118,40 @@ export function generateSmv(model: DiagramModel): GeneratedModel {
 
 function setOrValue(values: string[]): string {
     return values.length === 1 ? values[0] : `{${values.join(', ')}}`;
+}
+
+/**
+ * Transition relation with guards and updates. A transition is enabled when
+ * the machine is in its source state, its guard holds and its updates stay in
+ * the variables' ranges; variables it does not update keep their value. When
+ * no transition is enabled the machine stutters, so every path is infinite.
+ */
+function transRelation(model: DiagramModel, indent: string): string[] {
+    const ranges = new Map(model.variables.filter(v => v.type.kind === 'range').map(v => [v.name, v.type as { low: number; high: number }]));
+    const enabled = (t: TransitionDef) => {
+        const parts = [`state = ${t.source}`];
+        if (t.guard) parts.push(`(${t.guard})`);
+        for (const u of t.updates ?? []) {
+            const r = ranges.get(u.variable);
+            const constant = /^-?\d+$/.test(u.expression.trim()) ? Number(u.expression) : undefined;
+            if (r && !(constant !== undefined && constant >= r.low && constant <= r.high)) {
+                parts.push(`(${u.expression}) >= ${r.low} & (${u.expression}) <= ${r.high}`);
+            }
+        }
+        return parts.join(' & ');
+    };
+    const lines = ['TRANS'];
+    model.transitions.forEach((t, i) => {
+        const next = [`next(state) = ${t.target}`];
+        for (const v of model.variables) {
+            const u = t.updates?.find(x => x.variable === v.name);
+            next.push(`next(${v.name}) = ${u ? `(${u.expression})` : v.name}`);
+        }
+        lines.push(`${indent}${i === 0 ? '  ' : '| '}(${enabled(t)} & ${next.join(' & ')})${t.label ? ` -- ${t.label}` : ''}`);
+    });
+    const any = model.transitions.map(t => `(${enabled(t)})`).join(' | ') || 'FALSE';
+    const stay = ['next(state) = state', ...model.variables.map(v => `next(${v.name}) = ${v.name}`)].join(' & ');
+    lines.push(`${indent}${model.transitions.length === 0 ? '  ' : '| '}(!(${any}) & ${stay}) -- nothing enabled: stutter`);
+    lines.push(`${indent};`);
+    return lines;
 }

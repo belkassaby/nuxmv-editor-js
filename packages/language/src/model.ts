@@ -18,6 +18,20 @@ export interface AttributeDef {
     type: AttributeType;
 }
 
+/** A data variable: bounded counter or flag, initialised once and updated by transitions. */
+export interface VariableDef {
+    name: string;
+    type: AttributeType;
+    /** Initial value in nuXmv syntax (TRUE/FALSE, an integer or an enum symbol). */
+    initial: string;
+}
+
+export interface UpdateDef {
+    variable: string;
+    /** Expression in nuXmv syntax, evaluated in the source state. */
+    expression: string;
+}
+
 export interface Position {
     x: number;
     y: number;
@@ -38,6 +52,12 @@ export interface TransitionDef {
     source: string;
     target: string;
     label?: string;
+    /** Condition over attributes and variables under which the transition is enabled. */
+    guard?: string;
+    /** Variable updates performed by the transition (simultaneous assignment). */
+    updates?: UpdateDef[];
+    /** Probability, for the probabilistic (DTMC) analysis. */
+    probability?: number;
 }
 
 export type SpecKind = 'LTLSPEC' | 'CTLSPEC' | 'INVARSPEC';
@@ -57,6 +77,7 @@ export interface FairnessDef {
 export interface DiagramModel {
     name?: string;
     attributes: AttributeDef[];
+    variables: VariableDef[];
     states: StateDef[];
     transitions: TransitionDef[];
     fairness: FairnessDef[];
@@ -64,7 +85,7 @@ export interface DiagramModel {
 }
 
 export function emptyDiagram(name = 'main'): DiagramModel {
-    return { name, attributes: [], states: [], transitions: [], fairness: [], specs: [] };
+    return { name, attributes: [], variables: [], states: [], transitions: [], fairness: [], specs: [] };
 }
 
 /** All values an attribute can take, in nuXmv syntax. */
@@ -113,4 +134,9 @@ export function successors(model: DiagramModel, state: string): string[] {
         if (t.source === state && !result.includes(t.target)) result.push(t.target);
     }
     return result;
+}
+
+/** True if the diagram uses data (variables, guards or updates), which changes the nuXmv encoding. */
+export function hasData(model: DiagramModel): boolean {
+    return model.variables.length > 0 || model.transitions.some(t => t.guard || (t.updates && t.updates.length > 0));
 }

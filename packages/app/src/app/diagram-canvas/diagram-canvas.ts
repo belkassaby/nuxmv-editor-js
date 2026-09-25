@@ -181,7 +181,14 @@ export class DiagramCanvas implements OnDestroy {
                         index: model.transitions.indexOf(t),
                         source: t.source,
                         target: t.target,
-                        label: t.label ?? ''
+                        label: [
+                            t.label ?? '',
+                            t.guard ? `[${t.guard}]` : '',
+                            t.updates?.length ? `/ ${t.updates.map(u => `${u.variable}:=${u.expression}`).join(', ')}` : '',
+                            t.probability !== undefined ? `(${t.probability})` : ''
+                        ]
+                            .filter(Boolean)
+                            .join(' ')
                     }
                 }));
             cy.add(edges);

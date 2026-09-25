@@ -3,7 +3,7 @@ import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { EXAMPLES, generateNotebook, generatePython, parseDiagram } from '../src/index.js';
+import { EXAMPLES, generateNotebook, generatePython, parseDiagram, Semantics } from '../src/index.js';
 
 const python = ['python3', 'python'].find(cmd => spawnSync(cmd, ['--version']).status === 0);
 
@@ -67,6 +67,39 @@ assert fsm._repr_svg_().startswith("<svg")
 print("ok")
 `);
         expect(out.trim()).toBe('ok');
+    });
+
+    it('agrees with the TypeScript semantics on a model with guards and data', async () => {
+        const { model } = await parseDiagram(EXAMPLES.find(e => e.id === 'agent-retry-data')!.source);
+        const py = await generatePython(model);
+        writeFileSync(join(dir, `${py.moduleName}.py`), py.code);
+        const sem = await Semantics.of(model);
+        const eventOf = new Map(py.transitions.map(t => [t.index, t.event]));
+        for (const seed of [1, 2, 3, 4, 5]) {
+            let config = sem.initialConfigurations()[0];
+            let x = seed;
+            const steps: Array<{ event: string; enabled: string[]; variables: Record<string, unknown> }> = [];
+            for (let k = 0; k < 60; k++) {
+                const enabled = sem.enabled(config).filter(i => eventOf.has(i));
+                if (enabled.length === 0) break;
+                x = (x * 48271) % 2147483647;
+                const i = enabled[x % enabled.length];
+                config = sem.fire(i, config);
+                steps.push({ event: eventOf.get(i)!, enabled: enabled.map(j => eventOf.get(j)!).sort(), variables: config.variables });
+            }
+            writeFileSync(join(dir, 'steps.json'), JSON.stringify(steps));
+            const out = run(`
+import json, ${py.moduleName} as m
+fsm = m.${py.className}()
+bad = 0
+for s in json.load(open("steps.json")):
+    if sorted(e.value for e in fsm.allowed_events()) != s["enabled"]: bad += 1
+    fsm.send(s["event"])
+    if fsm.variables != s["variables"]: bad += 1
+print(bad)
+`);
+            expect(out.trim()).toBe('0');
+        }
     });
 
     it('monitors catch a design that skips the human release decision', async () => {

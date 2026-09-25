@@ -100,6 +100,47 @@ export class AttributeTable {
         });
     }
 
+    // ------------------------------------------------------------- variables
+
+    addVariable(): void {
+        const m = this.store.model();
+        const used = new Set([...m.attributes, ...m.variables, ...m.states].map(x => x.name));
+        const candidates = ['retries', 'budget', 'approved', ...Array.from({ length: 50 }, (_, i) => `v${i + 1}`)];
+        const name = candidates.find(c => !used.has(c)) ?? `v${Date.now()}`;
+        this.store.update(model => model.variables.push({ name, type: { kind: 'range', low: 0, high: 3 }, initial: '0' }));
+    }
+
+    removeVariable(index: number): void {
+        this.store.update(m => m.variables.splice(index, 1));
+    }
+
+    setVariable(index: number, patch: { name?: string; kind?: string; domain?: string; initial?: string }): void {
+        this.store.update(m => {
+            const v = m.variables[index];
+            if (!v) return;
+            if (patch.name !== undefined && /^[_a-zA-Z][\w$#]*$/.test(patch.name.trim())) v.name = patch.name.trim();
+            if (patch.kind) {
+                v.type = patch.kind === 'boolean' ? { kind: 'boolean' } : patch.kind === 'enum' ? { kind: 'enum', values: ['v0', 'v1'] } : { kind: 'range', low: 0, high: 3 };
+                v.initial = attributeDomain(v.type)[0];
+            }
+            if (patch.domain !== undefined) {
+                const text = patch.domain.trim();
+                const range = /^(-?\d+)\s*\.\.\s*(-?\d+)$/.exec(text);
+                if (v.type.kind === 'range' && range && Number(range[1]) <= Number(range[2])) v.type = { kind: 'range', low: Number(range[1]), high: Number(range[2]) };
+                if (v.type.kind === 'enum') {
+                    const values = [...new Set(text.split(/[\s,]+/).filter(Boolean))];
+                    if (values.length > 0) v.type = { kind: 'enum', values };
+                }
+                if (!attributeDomain(v.type).includes(v.initial)) v.initial = attributeDomain(v.type)[0];
+            }
+            if (patch.initial !== undefined && attributeDomain(v.type).includes(patch.initial)) v.initial = patch.initial;
+        });
+    }
+
+    domainOf(type: AttributeType): string[] {
+        return attributeDomain(type);
+    }
+
     async importLegacy(): Promise<void> {
         const file = await pickFile('.txt,text/plain');
         if (!file) return;

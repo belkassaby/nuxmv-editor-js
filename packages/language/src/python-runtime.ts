@@ -273,6 +273,7 @@ class StateMachine:
         self.history = []
         self.visited = [start]
         self.free_values = {}
+        self.variables = dict(VARIABLES)
         self._listeners = list(listeners)
         self.monitors = [_Monitor(*m) for m in MONITOR_SPECS]
         self._check_monitors(record=None)
@@ -286,17 +287,33 @@ class StateMachine:
         for name, value in self.free_values.items():
             if v.get(name) is None:
                 v[name] = value
+        v.update(self.variables)
         v["state"] = self.state.value
         return v
 
     def allowed_events(self):
-        return [e for (s, e) in TRANSITIONS if s == self.state]
+        """Events with a transition from the current state whose guard holds and whose updates stay in range."""
+        return [e for (s, e) in TRANSITIONS if s == self.state and self._blocked((s, e)) is None]
 
     def can(self, event):
         try:
-            return (self.state, _to_event(event)) in TRANSITIONS
+            key = (self.state, _to_event(event))
         except InvalidTransition:
             return False
+        return key in TRANSITIONS and self._blocked(key) is None
+
+    def _blocked(self, key):
+        """Why a transition of the table cannot fire now (None if it can)."""
+        v = self.values
+        guard = GUARDS.get(key)
+        if guard is not None and not guard(v):
+            return "its guard is false"
+        update = UPDATES.get(key)
+        if update is not None:
+            for name, value in update(v).items():
+                if value not in DOMAINS[name]:
+                    return "it would set %s to %r, outside its domain" % (name, value)
+        return None
 
     @property
     def is_terminal(self):
@@ -310,7 +327,13 @@ class StateMachine:
         if key not in TRANSITIONS:
             raise InvalidTransition("%s is not allowed in state %s (allowed: %s)" % (
                 event.value, self.state.value, ", ".join(e.value for e in self.allowed_events()) or "none"))
+        why = self._blocked(key)
+        if why is not None:
+            raise InvalidTransition("%s is not enabled in state %s: %s" % (event.value, self.state.value, why))
         source, target = self.state, TRANSITIONS[key]
+        update = UPDATES.get(key)
+        if update is not None:
+            self.variables.update(update(self.values))
         self._set_free_values(target, values or {})
         getattr(self, "on_exit_" + source.value, _noop)(event, data)
         self.state = target
@@ -330,8 +353,8 @@ class StateMachine:
     def _set_free_values(self, target, values):
         self.free_values = {}
         for name, value in values.items():
-            if name not in DOMAINS:
-                raise InvalidTransition("unknown attribute %r" % (name,))
+            if name not in DOMAINS or name in VARIABLES:
+                raise InvalidTransition("unknown attribute %r (variables change only through transitions)" % (name,))
             if LABELS[target].get(name) is not None:
                 raise InvalidTransition("%s is fixed to %r in state %s" % (name, LABELS[target][name], target.value))
             if value not in DOMAINS[name]:

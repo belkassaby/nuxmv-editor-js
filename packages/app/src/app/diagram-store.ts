@@ -1,4 +1,4 @@
-import { computed, Injectable, signal } from '@angular/core';
+import { computed, effect, Injectable, signal } from '@angular/core';
 import {
     EXAMPLES,
     GenerationError,
@@ -10,7 +10,9 @@ import {
     parseDiagram,
     serializeDiagram,
     successors,
+    Semantics,
     type AttributeDef,
+    type Configuration,
     type Diagnostic,
     type DiagramModel,
     type Position,
@@ -74,7 +76,10 @@ export class DiagramStore {
     readonly verification = signal<Verification | null>(null);
     readonly trace = signal<{ specIndex: number; trace: Trace } | null>(null);
     readonly traceStep = signal(0);
-    readonly simulation = signal<string[] | null>(null);
+    /** Simulated run: configurations (state + data variables), oldest first. */
+    readonly simulation = signal<Configuration[] | null>(null);
+    /** Executable semantics of the current model (guards, updates), rebuilt when it changes. */
+    readonly semantics = signal<Semantics | null>(null);
     /** States reported by a running Python machine (live link), oldest first. */
     readonly live = signal<string[] | null>(null);
     /** Incremented to ask the canvas to run an automatic layout. */
@@ -103,10 +108,15 @@ export class DiagramStore {
         }
         const sim = this.simulation();
         if (sim) {
-            const current = sim[sim.length - 1];
-            // Same semantics as the generated model: dead ends loop on themselves.
-            const next = current ? successors(this.model(), current) : this.initialStates();
-            return { path: sim, current: sim.length - 1, candidates: current && next.length === 0 ? [current] : next };
+            const last = sim[sim.length - 1];
+            const sem = this.semantics();
+            // Same semantics as the generated model: guards, updates, and stutter when nothing is enabled.
+            const next = !last
+                ? this.initialStates()
+                : sem
+                  ? [...new Set(sem.successors(last).map(s => s.config.state))]
+                  : successors(this.model(), last.state);
+            return { path: sim.map(c => c.state), current: sim.length - 1, candidates: next };
         }
         const t = this.trace();
         if (!t) return null;
@@ -127,6 +137,17 @@ export class DiagramStore {
 
     constructor() {
         this.loadExample(EXAMPLES[0].id);
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        effect(() => {
+            const model = this.model();
+            clearTimeout(timer);
+            timer = setTimeout(() => {
+                Semantics.of(model).then(
+                    sem => this.model() === model && this.semantics.set(sem),
+                    () => this.semantics.set(null)
+                );
+            }, 150);
+        });
     }
 
     // ------------------------------------------------------------------ text
@@ -365,15 +386,27 @@ export class DiagramStore {
     startSimulation(): void {
         this.trace.set(null);
         this.live.set(null);
-        const initial = this.initialStates();
+        const initial = this.initialConfigurations();
         this.simulation.set(initial.length === 1 ? [initial[0]] : []);
     }
 
     simulateTo(state: string): void {
         const path = this.simulation();
-        const h = this.highlight();
-        if (!path || !h?.candidates?.includes(state)) return;
-        this.simulation.set([...path, state]);
+        if (!path) return;
+        const last = path[path.length - 1];
+        if (!last) {
+            const start = this.initialConfigurations().find(c => c.state === state);
+            if (start) this.simulation.set([start]);
+            return;
+        }
+        const sem = this.semantics();
+        const step = sem ? sem.successors(last).find(s => s.config.state === state)?.config : successors(this.model(), last.state).includes(state) ? { state, variables: { ...last.variables } } : undefined;
+        if (step) this.simulation.set([...path, step]);
+    }
+
+    private initialConfigurations(): Configuration[] {
+        const sem = this.semantics();
+        return sem ? sem.initialConfigurations() : this.initialStates().map(state => ({ state, variables: {} }));
     }
 
     simulateRandom(): void {
@@ -404,7 +437,7 @@ export class DiagramStore {
             this.trace.set(null);
         }
         const sim = this.simulation();
-        if (sim && sim.some(s => !this.model().states.some(x => x.name === s))) this.simulation.set(null);
+        if (sim && sim.some(c => !this.model().states.some(x => x.name === c.state))) this.simulation.set(null);
     }
 }
 

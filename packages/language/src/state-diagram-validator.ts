@@ -9,11 +9,14 @@ import {
     isRangeType,
     isUnaryExpression,
     type Attribute,
+    type AttributeValue,
     type Diagram,
     type Expression,
     type Fairness,
     type Specification,
     type State,
+    type Transition,
+    type Variable,
     type StateDiagramAstType
 } from './generated/ast.js';
 import type { StateDiagramServices } from './state-diagram-module.js';
@@ -41,6 +44,8 @@ export function registerValidationChecks(services: StateDiagramServices): void {
         Attribute: validator.checkAttribute,
         State: validator.checkState,
         Specification: validator.checkSpecification,
+        Variable: validator.checkVariable,
+        Transition: validator.checkTransition,
         Fairness: validator.checkFairness
     };
     registry.register(checks, validator);
@@ -48,6 +53,10 @@ export function registerValidationChecks(services: StateDiagramServices): void {
 
 export function diagramAttributes(diagram: Diagram): Attribute[] {
     return diagram.elements.flatMap(e => (e.$type === 'AttributeBlock' ? e.attributes : []));
+}
+
+export function diagramVariables(diagram: Diagram): Variable[] {
+    return diagram.elements.flatMap(e => (e.$type === 'VariableBlock' ? e.variables : []));
 }
 
 export function diagramStates(diagram: Diagram): State[] {
@@ -59,8 +68,30 @@ export class StateDiagramValidator {
         const states = diagramStates(diagram);
         const attributes = diagramAttributes(diagram);
 
+        const variables = diagramVariables(diagram);
         reportDuplicates(states, 'state', accept);
-        reportDuplicates(attributes, 'attribute', accept);
+        reportDuplicates([...attributes, ...variables], 'attribute or variable', accept);
+        const stateNames = new Set(states.map(st => st.name));
+        for (const v of variables) {
+            if (NUXMV_RESERVED.has(v.name)) accept('error', `'${v.name}' is a reserved word in nuXmv and cannot name a variable.`, { node: v, property: 'name' });
+            if (stateNames.has(v.name)) accept('error', `Variable '${v.name}' has the same name as a state.`, { node: v, property: 'name' });
+        }
+
+        // Probabilities of the transitions leaving a state must add up to 1.
+        const outgoing = new Map<string, Transition[]>();
+        for (const element of diagram.elements) {
+            if (element.$type !== 'Transition') continue;
+            const source = element.source.ref?.name ?? element.source.$refText;
+            outgoing.set(source, [...(outgoing.get(source) ?? []), element]);
+        }
+        for (const [source, list] of outgoing) {
+            const withProb = list.filter(t => t.probability !== undefined);
+            if (withProb.length === 0) continue;
+            const sum = withProb.reduce((acc, t) => acc + (t.probability ?? 0), 0);
+            if (withProb.length < list.length || Math.abs(sum - 1) > 1e-6) {
+                accept('warning', `Transition probabilities from '${source}' add up to ${Math.round(sum * 1000) / 1000}${withProb.length < list.length ? ` and ${list.length - withProb.length} transition(s) have none` : ''}; the probabilistic analysis normalises them.`, { node: withProb[0], property: 'probability' });
+            }
+        }
 
         const reserved = (node: AstNode & { name: string }, what: string) => {
             if (NUXMV_RESERVED.has(node.name)) {
@@ -179,6 +210,33 @@ export class StateDiagramValidator {
         }
     }
 
+    checkVariable(variable: Variable, accept: ValidationAcceptor): void {
+        this.checkAttribute(variable as unknown as Attribute, accept);
+        const problem = valueProblem(variable.type, variable.initial);
+        if (problem) accept('error', `Initial value of '${variable.name}': ${problem}`, { node: variable, property: 'initial' });
+    }
+
+    checkTransition(transition: Transition, accept: ValidationAcceptor): void {
+        const pure = (expression: Expression, what: string) => {
+            this.checkNames(transition, expression, accept);
+            for (const node of expressionNodes(expression)) {
+                const op = temporalOperator(node);
+                if (op) accept('error', `${what} must be a condition on the current state, found '${op}'.`, { node });
+            }
+        };
+        if (transition.guard) pure(transition.guard, 'A guard');
+        const assigned = new Set<string>();
+        for (const update of transition.updates) {
+            pure(update.value, 'An update');
+            const name = update.variable.ref?.name ?? update.variable.$refText;
+            if (assigned.has(name)) accept('error', `'${name}' is updated twice by the same transition.`, { node: update, property: 'variable' });
+            assigned.add(name);
+        }
+        if (transition.probability !== undefined && (transition.probability <= 0 || transition.probability > 1)) {
+            accept('error', 'A probability must be in (0, 1].', { node: transition, property: 'probability' });
+        }
+    }
+
     checkSpecification(spec: Specification, accept: ValidationAcceptor): void {
         this.checkNames(spec, spec.expression, accept);
         for (const node of expressionNodes(spec.expression)) {
@@ -205,18 +263,18 @@ export class StateDiagramValidator {
         }
     }
 
-    private checkNames(owner: Specification | Fairness, expression: Expression, accept: ValidationAcceptor): void {
+    private checkNames(owner: Specification | Fairness | Transition, expression: Expression, accept: ValidationAcceptor): void {
         const diagram = owner.$container;
         const known = new Set<string>();
-        for (const attribute of diagramAttributes(diagram)) {
-            known.add(attribute.name);
-            if (isEnumType(attribute.type)) attribute.type.values.forEach(v => known.add(v.name));
+        for (const declared of [...diagramAttributes(diagram), ...diagramVariables(diagram)]) {
+            known.add(declared.name);
+            if (isEnumType(declared.type)) declared.type.values.forEach(v => known.add(v.name));
         }
         diagramStates(diagram).forEach(s => known.add(s.name));
 
         for (const node of expressionNodes(expression)) {
             if (isNameReference(node) && !known.has(node.name)) {
-                accept('error', `Unknown name '${node.name}': expected an attribute, a state or an enumeration value.`, {
+                accept('error', `Unknown name '${node.name}': expected an attribute, a variable, a state or an enumeration value.`, {
                     node,
                     property: 'name'
                 });
@@ -251,4 +309,18 @@ function reportDuplicates(nodes: Array<{ name: string } & AstNode>, what: string
         }
         seen.add(node.name);
     }
+}
+
+/** Type check of a literal value against a domain (undefined if it fits). */
+function valueProblem(type: Attribute['type'], value: AttributeValue): string | undefined {
+    if (type.$type === 'BooleanType') return isBooleanValue(value) ? undefined : 'expected TRUE or FALSE.';
+    if (isRangeType(type)) {
+        if (!isIntegerValue(value)) return `expected an integer in ${type.low}..${type.high}.`;
+        return value.value < type.low || value.value > type.high ? `${value.value} is outside ${type.low}..${type.high}.` : undefined;
+    }
+    if (isEnumType(type)) {
+        const allowed = type.values.map(v => v.name);
+        return value.$type === 'SymbolValue' && allowed.includes(value.symbol) ? undefined : `expected one of { ${allowed.join(', ')} }.`;
+    }
+    return undefined;
 }

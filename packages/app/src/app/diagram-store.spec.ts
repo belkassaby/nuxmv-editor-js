@@ -57,11 +57,22 @@ describe('DiagramStore', () => {
         expect(store.renameState('s1', 's2')).toMatch(/already exists/);
     });
 
-    it('simulates the diagram', () => {
+    it('simulates the diagram', async () => {
+        await new Promise(resolve => setTimeout(resolve, 300)); // semantics are built asynchronously
         store.startSimulation();
         expect(store.highlight()?.path).toEqual(['s0']);
         expect(store.highlight()?.candidates).toEqual(['s1', 's3']);
         store.simulateTo('s3');
-        expect(store.simulation()).toEqual(['s0', 's3']);
+        expect(store.simulation()?.map(c => c.state)).toEqual(['s0', 's3']);
+    });
+
+    it('simulates guards and data variables', async () => {
+        store.loadExample('agent-retry-data');
+        await new Promise(resolve => setTimeout(resolve, 500));
+        store.startSimulation();
+        for (const s of ['test', 'work', 'test', 'work', 'test']) store.simulateTo(s);
+        expect(store.simulation()?.at(-1)?.variables).toEqual({ retries: 2, approved: false });
+        // The retry budget is spent: only review and escalation remain possible.
+        expect(store.highlight()?.candidates?.sort()).toEqual(['human', 'review']);
     });
 });

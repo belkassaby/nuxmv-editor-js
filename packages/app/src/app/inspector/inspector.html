@@ -61,7 +61,19 @@
       <span>Label</span>
       <input #tl [value]="t.label ?? ''" placeholder="optional, e.g. an action name" (change)="setTransitionLabel($any(store.selection()).index, tl.value)" />
     </label>
-    <p class="muted small">Labels document the diagram; the generated model is an unlabelled transition system.</p>
+    <label class="field">
+      <span>Guard (when)</span>
+      <input #tg class="mono" [value]="t.guard ?? ''" placeholder="e.g. retries < 2" (change)="setGuard($any(store.selection()).index, tg.value)" spellcheck="false" />
+    </label>
+    <label class="field">
+      <span>Updates (do)</span>
+      <input #tu class="mono" [value]="updatesText($any(store.selection()).index)" placeholder="e.g. retries := retries + 1" (change)="setUpdates($any(store.selection()).index, tu.value)" spellcheck="false" />
+    </label>
+    <label class="field">
+      <span>Probability</span>
+      <input #tp type="number" min="0" max="1" step="0.05" [value]="t.probability ?? ''" placeholder="for the probabilistic analysis" (change)="setProbability($any(store.selection()).index, tp.value)" />
+    </label>
+    <p class="muted small">The transition fires only when its guard holds and its updates keep the variables in range. Labels name the event in the generated code.</p>
     <div class="actions">
       <button type="button" (click)="reverse($any(store.selection()).index)">Reverse</button>
       <button type="button" class="danger" (click)="store.deleteSelection()">Delete transition</button>

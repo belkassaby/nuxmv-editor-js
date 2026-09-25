@@ -63,3 +63,33 @@
     </table>
   </div>
 }
+
+<h4>Data variables</h4>
+<p class="muted small">Counters and flags changed by transitions (<code>do retries := retries + 1</code>) and tested by guards (<code>when retries &lt; 2</code>). Unlike attributes, their value is not fixed by the state.</p>
+@if (store.model().variables.length > 0) {
+  <table class="grid">
+    <thead><tr><th>Variable</th><th>Type</th><th>Domain</th><th>Initial</th><th></th></tr></thead>
+    <tbody>
+      @for (v of store.model().variables; track $index; let i = $index) {
+        <tr>
+          <td><input #vn class="mono narrow" [value]="v.name" (change)="setVariable(i, { name: vn.value })" spellcheck="false" /></td>
+          <td>
+            <select (change)="setVariable(i, { kind: $any($event.target).value })">
+              <option value="boolean" [selected]="v.type.kind === 'boolean'">boolean</option>
+              <option value="enum" [selected]="v.type.kind === 'enum'">enumeration</option>
+              <option value="range" [selected]="v.type.kind === 'range'">integer range</option>
+            </select>
+          </td>
+          <td><input #vd class="mono" [value]="domainText(v.type)" [disabled]="v.type.kind === 'boolean'" (change)="setVariable(i, { domain: vd.value })" spellcheck="false" /></td>
+          <td>
+            <select (change)="setVariable(i, { initial: $any($event.target).value })">
+              @for (d of domainOf(v.type); track d) { <option [value]="d" [selected]="v.initial === d">{{ d }}</option> }
+            </select>
+          </td>
+          <td><button type="button" class="icon danger" (click)="removeVariable(i)" [attr.aria-label]="'Remove ' + v.name" title="Remove variable">×</button></td>
+        </tr>
+      }
+    </tbody>
+  </table>
+}
+<div class="actions"><button type="button" (click)="addVariable()">+ Add variable</button></div>
