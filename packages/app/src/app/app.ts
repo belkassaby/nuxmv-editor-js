@@ -1,6 +1,7 @@
 import { Component, computed, effect, HostListener, inject, OnInit, signal, viewChild } from '@angular/core';
 import { EXAMPLES } from '@nuxmv-editor/language';
 import { AttributeTable } from './attribute-table/attribute-table';
+import { CodeExport } from './code-export';
 import { DiagramCanvas } from './diagram-canvas/diagram-canvas';
 import { DiagramStore } from './diagram-store';
 import { downloadText, pickFile } from './file-io';
@@ -14,7 +15,7 @@ import { Splitter } from './splitter/splitter';
 import { TextEditor } from './text-editor/text-editor';
 import { TracePanel } from './trace-panel/trace-panel';
 
-type Tab = 'attributes' | 'properties' | 'trace' | 'model' | 'console';
+type Tab = 'attributes' | 'properties' | 'trace' | 'model' | 'python' | 'console';
 
 const SIZES_KEY = 'nuxmv-editor.pane-sizes';
 const DEFAULT_SIZES = { text: 440, inspector: 280, bottom: 320 };
@@ -38,6 +39,7 @@ function loadSizes(): typeof DEFAULT_SIZES {
 export class App implements OnInit {
     readonly store = inject(DiagramStore);
     readonly api = inject(NuxmvApi);
+    readonly codeExport = inject(CodeExport);
     readonly exampleGroups = [...new Set(EXAMPLES.map(e => e.group))].map(name => ({ name, examples: EXAMPLES.filter(e => e.group === name) }));
     readonly tab = signal<Tab>('properties');
     readonly openMenu = signal<string | null>(null);
@@ -59,16 +61,19 @@ export class App implements OnInit {
         return [
             { id: 'attributes' as Tab, label: `Attributes (${this.store.model().attributes.length})` },
             { id: 'properties' as Tab, label: `Properties (${this.store.model().specs.length})`, badge: failed > 0 ? `${failed} ✗` : undefined },
-            { id: 'trace' as Tab, label: this.store.simulation() ? 'Simulation' : 'Trace', dot: !!this.store.highlight() },
+            { id: 'trace' as Tab, label: this.store.live() ? 'Live' : this.store.simulation() ? 'Simulation' : 'Trace', dot: !!this.store.highlight() },
             { id: 'model' as Tab, label: 'nuXmv model' },
+            { id: 'python' as Tab, label: 'Python' },
             { id: 'console' as Tab, label: 'nuXmv output' }
         ];
     });
 
     constructor() {
-        // Opening a counterexample or starting a simulation brings its panel to the front.
+        // Opening a counterexample, or starting a simulation or a live session, brings its panel to
+        // the front once (not on every step, so other tabs stay usable meanwhile).
+        const active = computed(() => (this.store.live() ? 'live' : this.store.simulation() ? 'sim' : this.store.trace() ? 'trace' : ''));
         effect(() => {
-            if (this.store.trace() || this.store.simulation()) this.tab.set('trace');
+            if (active()) this.tab.set('trace');
         });
     }
 

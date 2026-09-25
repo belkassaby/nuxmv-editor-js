@@ -112,7 +112,18 @@ Conjunction infers Expression:
 
 // U until, V release; past-time S since, T triggered.
 TemporalBinary infers Expression:
-    Comparison ({infer BinaryExpression.left=current} operator=('U' | 'V' | 'S' | 'T') right=Comparison)*;
+    TemporalUnary ({infer BinaryExpression.left=current} operator=('U' | 'V' | 'S' | 'T') right=TemporalUnary)*;
+
+// As in nuXmv, unary temporal operators take a whole comparison:
+// F status = ready is F (status = ready). ! stays tight (!a = b is (!a) = b),
+// except in front of a temporal operator: ! F p is !(F p).
+TemporalUnary infers Expression:
+    TemporalPrefixed
+  | {infer UnaryExpression} operator='!' operand=TemporalPrefixed
+  | Comparison;
+
+TemporalPrefixed infers Expression:
+    {infer UnaryExpression} operator=TemporalOperator operand=TemporalUnary;
 
 Comparison infers Expression:
     Additive ({infer BinaryExpression.left=current} operator=('=' | '!=' | '<' | '>' | '<=' | '>=') right=Additive)*;
@@ -124,12 +135,12 @@ Multiplicative infers Expression:
     Unary ({infer BinaryExpression.left=current} operator=('*' | '/' | 'mod') right=Unary)*;
 
 Unary infers Expression:
-    {infer UnaryExpression} operator=UnaryOperator operand=Unary
+    {infer UnaryExpression} operator=('!' | '-') operand=Unary
   | Primary;
 
 // Future LTL (G F X), past LTL (Y previous, Z weak previous, H historically, O once), CTL.
-UnaryOperator returns string:
-    '!' | '-' | 'G' | 'F' | 'X' | 'Y' | 'Z' | 'H' | 'O' | 'AG' | 'AF' | 'AX' | 'EG' | 'EF' | 'EX';
+TemporalOperator returns string:
+    'G' | 'F' | 'X' | 'Y' | 'Z' | 'H' | 'O' | 'AG' | 'AF' | 'AX' | 'EG' | 'EF' | 'EX';
 
 Primary infers Expression:
     '(' Expression ')'

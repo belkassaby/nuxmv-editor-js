@@ -1,4 +1,5 @@
 import { Component, computed, inject, input, signal } from '@angular/core';
+import { CodeExport } from '../code-export';
 import { DiagramStore } from '../diagram-store';
 import { downloadText } from '../file-io';
 
@@ -9,7 +10,8 @@ import { downloadText } from '../file-io';
 })
 export class OutputPanel {
     readonly store = inject(DiagramStore);
-    readonly view = input<'model' | 'console'>('model');
+    readonly view = input<'model' | 'python' | 'console'>('model');
+    readonly code = inject(CodeExport);
     readonly showBanner = signal(false);
     readonly copied = signal(false);
 
@@ -29,8 +31,8 @@ export class OutputPanel {
         downloadText(`${this.fileBase()}.smv`, this.store.generated().text);
     }
 
-    async copy(): Promise<void> {
-        await navigator.clipboard.writeText(this.store.generated().text);
+    async copy(text = this.store.generated().text): Promise<void> {
+        await navigator.clipboard.writeText(text);
         this.copied.set(true);
         setTimeout(() => this.copied.set(false), 1500);
     }

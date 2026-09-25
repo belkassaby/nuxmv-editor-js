@@ -19,6 +19,8 @@ export interface Diagnostic {
 
 export interface ParseOutcome {
     model: DiagramModel;
+    /** The Langium syntax tree (used by generators that need expression structure). */
+    ast: Diagram;
     diagnostics: Diagnostic[];
     /** True if the text could not be parsed; `model` is then best effort. */
     hasSyntaxErrors: boolean;
@@ -61,6 +63,7 @@ export async function parseDiagram(text: string): Promise<ParseOutcome> {
         const hasSyntaxErrors = document.parseResult.lexerErrors.length > 0 || document.parseResult.parserErrors.length > 0;
         return {
             model: astToModel(document.parseResult.value),
+            ast: document.parseResult.value,
             diagnostics,
             hasSyntaxErrors,
             hasErrors: diagnostics.some(d => d.severity === 'error')

@@ -75,6 +75,8 @@ export class DiagramStore {
     readonly trace = signal<{ specIndex: number; trace: Trace } | null>(null);
     readonly traceStep = signal(0);
     readonly simulation = signal<string[] | null>(null);
+    /** States reported by a running Python machine (live link), oldest first. */
+    readonly live = signal<string[] | null>(null);
     /** Incremented to ask the canvas to run an automatic layout. */
     readonly layoutRequests = signal(0);
     /** Incremented when a new document is loaded, so the canvas fits it in view. */
@@ -94,6 +96,11 @@ export class DiagramStore {
     });
 
     readonly highlight = computed<Highlight | null>(() => {
+        const live = this.live();
+        if (live) {
+            const current = live[live.length - 1];
+            return { path: live, current: live.length - 1, candidates: current ? successors(this.model(), current) : [] };
+        }
         const sim = this.simulation();
         if (sim) {
             const current = sim[sim.length - 1];
@@ -316,6 +323,7 @@ export class DiagramStore {
         const result = this.verification()?.results[specIndex];
         if (!result?.trace) return;
         this.simulation.set(null);
+        this.live.set(null);
         this.trace.set({ specIndex, trace: result.trace });
         this.traceStep.set(0);
     }
@@ -330,6 +338,20 @@ export class DiagramStore {
     stopHighlight(): void {
         this.trace.set(null);
         this.simulation.set(null);
+        this.live.set(null);
+    }
+
+    // ------------------------------------------------------------- live link
+
+    startLive(): void {
+        this.trace.set(null);
+        this.simulation.set(null);
+        this.live.set([]);
+    }
+
+    pushLive(state: string, restarted = false): void {
+        const path = restarted ? [] : (this.live() ?? []);
+        this.live.set([...path, state].slice(-200));
     }
 
     // ------------------------------------------------------------ simulation
@@ -342,6 +364,7 @@ export class DiagramStore {
 
     startSimulation(): void {
         this.trace.set(null);
+        this.live.set(null);
         const initial = this.initialStates();
         this.simulation.set(initial.length === 1 ? [initial[0]] : []);
     }

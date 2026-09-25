@@ -75,6 +75,51 @@ export function createApp(options: AppOptions): express.Express {
         }
     });
 
+    // ------------------------------------------------------------------
+    // Live link: a running Python state machine (EditorLink) posts each state
+    // change; editors subscribed to the same channel receive it over SSE.
+    // ------------------------------------------------------------------
+    const channels = new Map<string, { clients: Set<Response>; last?: string }>();
+    const channel = (name: string) => {
+        if (!/^[\w-]{1,64}$/.test(name)) throw new HttpError(400, 'Channel names are 1-64 letters, digits, _ or -.');
+        let c = channels.get(name);
+        if (!c) channels.set(name, (c = { clients: new Set() }));
+        return c;
+    };
+
+    app.post('/api/live/:channel', (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const c = channel(String(req.params['channel']));
+            const body = (req.body ?? {}) as Record<string, unknown>;
+            if (typeof body['state'] !== 'string') throw new HttpError(400, "'state' (string) is required.");
+            const update = JSON.stringify({ ...body, receivedAt: Date.now() });
+            c.last = update;
+            for (const client of c.clients) client.write(`data: ${update}\n\n`);
+            res.json({ ok: true, listeners: c.clients.size });
+        } catch (error) {
+            next(error);
+        }
+    });
+
+    app.get('/api/live/:channel/stream', (req: Request, res: Response, next: NextFunction) => {
+        let c;
+        try {
+            c = channel(String(req.params['channel']));
+        } catch (error) {
+            next(error);
+            return;
+        }
+        res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache', connection: 'keep-alive' });
+        res.write(': connected\n\n');
+        if (c.last) res.write(`data: ${c.last}\n\n`);
+        c.clients.add(res);
+        const keepAlive = setInterval(() => res.write(': keep-alive\n\n'), 25_000);
+        req.on('close', () => {
+            clearInterval(keepAlive);
+            c.clients.delete(res);
+        });
+    });
+
     app.use('/api', (_req, res) => {
         res.status(404).json({ error: 'Not found' });
     });

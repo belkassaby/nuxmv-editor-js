@@ -13,6 +13,32 @@
     }
     <pre class="code">{{ store.generated().text }}</pre>
   }
+} @else if (view() === 'python') {
+  <div class="panel-bar">
+    <span class="muted small">Python runtime of this diagram: only verified transitions are allowed; invariants and past-time properties are monitored.</span>
+    <span class="spacer"></span>
+    <button type="button" (click)="copy(code.python()?.code ?? '')" [disabled]="!code.python()">{{ copied() ? 'Copied' : 'Copy' }}</button>
+    <button type="button" (click)="code.downloadPython()" [disabled]="!code.python()">Download {{ code.python()?.moduleName ?? 'module' }}.py</button>
+    <button type="button" class="primary" (click)="code.downloadNotebook()" [disabled]="!code.python()" title="Notebook with the module, a live diagram widget, a walk-through and counterexample replays">Jupyter notebook</button>
+  </div>
+  @if (code.error()) {
+    <p class="muted pad">{{ code.error() }}</p>
+  } @else if (code.python(); as py) {
+    <table class="grid monitors">
+      <thead><tr><th>Property</th><th>At run time</th></tr></thead>
+      <tbody>
+        @for (m of py.monitors; track m.name) {
+          <tr>
+            <td class="mono">{{ m.kind }} {{ m.name }}: {{ m.expression }}</td>
+            <td>@if (m.monitored) { <span class="badge ok">monitored</span> } @else { <span class="muted small">nuXmv only: {{ m.reason }}</span> }</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+    <pre class="code">{{ py.code }}</pre>
+  } @else {
+    <p class="muted pad">Generating…</p>
+  }
 } @else {
   @if (store.verification(); as v) {
     <div class="panel-bar">

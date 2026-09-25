@@ -205,3 +205,6 @@ code.example { display: block; margin-top: 4px; padding: 3px 8px; background: va
 ul.refs { list-style: none; padding: 0; display: flex; flex-direction: column; gap: 10px; }
 h4.with-help { display: flex; gap: 10px; align-items: baseline; }
 h4.with-help button.link { text-transform: none; letter-spacing: 0; font-family: var(--sans); font-weight: 500; }
+table.trace tr.current-row td { background: color-mix(in srgb, var(--trace-current) 18%, transparent); }
+table.monitors { margin: 4px 0 10px; }
+table.monitors td { white-space: normal; }

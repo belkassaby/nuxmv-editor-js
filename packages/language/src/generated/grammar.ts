@@ -69,7 +69,7 @@ export const StateDiagramGrammar = (): Grammar => loadedStateDiagramGrammar ?? (
           {
             "$type": "RuleCall",
             "rule": {
-              "$ref": "#/rules@30"
+              "$ref": "#/rules@32"
             },
             "arguments": []
           },
@@ -228,7 +228,7 @@ export const StateDiagramGrammar = (): Grammar => loadedStateDiagramGrammar ?? (
             "terminal": {
               "$type": "RuleCall",
               "rule": {
-                "$ref": "#/rules@30"
+                "$ref": "#/rules@32"
               },
               "arguments": []
             }
@@ -380,7 +380,7 @@ export const StateDiagramGrammar = (): Grammar => loadedStateDiagramGrammar ?? (
         "terminal": {
           "$type": "RuleCall",
           "rule": {
-            "$ref": "#/rules@30"
+            "$ref": "#/rules@32"
           },
           "arguments": []
         }
@@ -402,7 +402,7 @@ export const StateDiagramGrammar = (): Grammar => loadedStateDiagramGrammar ?? (
             "terminal": {
               "$type": "RuleCall",
               "rule": {
-                "$ref": "#/rules@28"
+                "$ref": "#/rules@30"
               },
               "arguments": []
             }
@@ -418,7 +418,7 @@ export const StateDiagramGrammar = (): Grammar => loadedStateDiagramGrammar ?? (
             "terminal": {
               "$type": "RuleCall",
               "rule": {
-                "$ref": "#/rules@28"
+                "$ref": "#/rules@30"
               },
               "arguments": []
             }
@@ -456,7 +456,7 @@ export const StateDiagramGrammar = (): Grammar => loadedStateDiagramGrammar ?? (
             "terminal": {
               "$type": "RuleCall",
               "rule": {
-                "$ref": "#/rules@30"
+                "$ref": "#/rules@32"
               },
               "arguments": []
             }
@@ -468,7 +468,7 @@ export const StateDiagramGrammar = (): Grammar => loadedStateDiagramGrammar ?? (
             "terminal": {
               "$type": "RuleCall",
               "rule": {
-                "$ref": "#/rules@32"
+                "$ref": "#/rules@34"
               },
               "arguments": []
             },
@@ -547,7 +547,7 @@ export const StateDiagramGrammar = (): Grammar => loadedStateDiagramGrammar ?? (
                 "terminal": {
                   "$type": "RuleCall",
                   "rule": {
-                    "$ref": "#/rules@28"
+                    "$ref": "#/rules@30"
                   },
                   "arguments": []
                 }
@@ -563,7 +563,7 @@ export const StateDiagramGrammar = (): Grammar => loadedStateDiagramGrammar ?? (
                 "terminal": {
                   "$type": "RuleCall",
                   "rule": {
-                    "$ref": "#/rules@28"
+                    "$ref": "#/rules@30"
                   },
                   "arguments": []
                 }
@@ -604,7 +604,7 @@ export const StateDiagramGrammar = (): Grammar => loadedStateDiagramGrammar ?? (
               "terminal": {
                 "$type": "RuleCall",
                 "rule": {
-                  "$ref": "#/rules@30"
+                  "$ref": "#/rules@32"
                 },
                 "arguments": []
               },
@@ -687,7 +687,7 @@ export const StateDiagramGrammar = (): Grammar => loadedStateDiagramGrammar ?? (
                 "terminal": {
                   "$type": "RuleCall",
                   "rule": {
-                    "$ref": "#/rules@28"
+                    "$ref": "#/rules@30"
                   },
                   "arguments": []
                 }
@@ -711,7 +711,7 @@ export const StateDiagramGrammar = (): Grammar => loadedStateDiagramGrammar ?? (
                 "terminal": {
                   "$type": "RuleCall",
                   "rule": {
-                    "$ref": "#/rules@30"
+                    "$ref": "#/rules@32"
                   },
                   "arguments": []
                 }
@@ -742,7 +742,7 @@ export const StateDiagramGrammar = (): Grammar => loadedStateDiagramGrammar ?? (
               "terminal": {
                 "$type": "RuleCall",
                 "rule": {
-                  "$ref": "#/rules@30"
+                  "$ref": "#/rules@32"
                 },
                 "arguments": []
               },
@@ -766,7 +766,7 @@ export const StateDiagramGrammar = (): Grammar => loadedStateDiagramGrammar ?? (
               "terminal": {
                 "$type": "RuleCall",
                 "rule": {
-                  "$ref": "#/rules@30"
+                  "$ref": "#/rules@32"
                 },
                 "arguments": []
               },
@@ -788,7 +788,7 @@ export const StateDiagramGrammar = (): Grammar => loadedStateDiagramGrammar ?? (
                 "terminal": {
                   "$type": "RuleCall",
                   "rule": {
-                    "$ref": "#/rules@32"
+                    "$ref": "#/rules@34"
                   },
                   "arguments": []
                 }
@@ -896,7 +896,7 @@ export const StateDiagramGrammar = (): Grammar => loadedStateDiagramGrammar ?? (
                 "terminal": {
                   "$type": "RuleCall",
                   "rule": {
-                    "$ref": "#/rules@30"
+                    "$ref": "#/rules@32"
                   },
                   "arguments": []
                 }
@@ -1272,6 +1272,116 @@ export const StateDiagramGrammar = (): Grammar => loadedStateDiagramGrammar ?? (
     },
     {
       "$type": "ParserRule",
+      "name": "TemporalUnary",
+      "inferredType": {
+        "$type": "InferredType",
+        "name": "Expression"
+      },
+      "definition": {
+        "$type": "Alternatives",
+        "elements": [
+          {
+            "$type": "RuleCall",
+            "rule": {
+              "$ref": "#/rules@23"
+            },
+            "arguments": []
+          },
+          {
+            "$type": "Group",
+            "elements": [
+              {
+                "$type": "Action",
+                "inferredType": {
+                  "$type": "InferredType",
+                  "name": "UnaryExpression"
+                }
+              },
+              {
+                "$type": "Assignment",
+                "feature": "operator",
+                "operator": "=",
+                "terminal": {
+                  "$type": "Keyword",
+                  "value": "!"
+                }
+              },
+              {
+                "$type": "Assignment",
+                "feature": "operand",
+                "operator": "=",
+                "terminal": {
+                  "$type": "RuleCall",
+                  "rule": {
+                    "$ref": "#/rules@23"
+                  },
+                  "arguments": []
+                }
+              }
+            ]
+          },
+          {
+            "$type": "RuleCall",
+            "rule": {
+              "$ref": "#/rules@24"
+            },
+            "arguments": []
+          }
+        ]
+      },
+      "entry": false,
+      "fragment": false,
+      "parameters": []
+    },
+    {
+      "$type": "ParserRule",
+      "name": "TemporalPrefixed",
+      "inferredType": {
+        "$type": "InferredType",
+        "name": "Expression"
+      },
+      "definition": {
+        "$type": "Group",
+        "elements": [
+          {
+            "$type": "Action",
+            "inferredType": {
+              "$type": "InferredType",
+              "name": "UnaryExpression"
+            }
+          },
+          {
+            "$type": "Assignment",
+            "feature": "operator",
+            "operator": "=",
+            "terminal": {
+              "$type": "RuleCall",
+              "rule": {
+                "$ref": "#/rules@28"
+              },
+              "arguments": []
+            }
+          },
+          {
+            "$type": "Assignment",
+            "feature": "operand",
+            "operator": "=",
+            "terminal": {
+              "$type": "RuleCall",
+              "rule": {
+                "$ref": "#/rules@22"
+              },
+              "arguments": []
+            }
+          }
+        ]
+      },
+      "entry": false,
+      "fragment": false,
+      "parameters": []
+    },
+    {
+      "$type": "ParserRule",
       "name": "Comparison",
       "inferredType": {
         "$type": "InferredType",
@@ -1283,7 +1393,7 @@ export const StateDiagramGrammar = (): Grammar => loadedStateDiagramGrammar ?? (
           {
             "$type": "RuleCall",
             "rule": {
-              "$ref": "#/rules@23"
+              "$ref": "#/rules@25"
             },
             "arguments": []
           },
@@ -1340,7 +1450,7 @@ export const StateDiagramGrammar = (): Grammar => loadedStateDiagramGrammar ?? (
                 "terminal": {
                   "$type": "RuleCall",
                   "rule": {
-                    "$ref": "#/rules@23"
+                    "$ref": "#/rules@25"
                   },
                   "arguments": []
                 }
@@ -1367,7 +1477,7 @@ export const StateDiagramGrammar = (): Grammar => loadedStateDiagramGrammar ?? (
           {
             "$type": "RuleCall",
             "rule": {
-              "$ref": "#/rules@24"
+              "$ref": "#/rules@26"
             },
             "arguments": []
           },
@@ -1408,7 +1518,7 @@ export const StateDiagramGrammar = (): Grammar => loadedStateDiagramGrammar ?? (
                 "terminal": {
                   "$type": "RuleCall",
                   "rule": {
-                    "$ref": "#/rules@24"
+                    "$ref": "#/rules@26"
                   },
                   "arguments": []
                 }
@@ -1435,7 +1545,7 @@ export const StateDiagramGrammar = (): Grammar => loadedStateDiagramGrammar ?? (
           {
             "$type": "RuleCall",
             "rule": {
-              "$ref": "#/rules@25"
+              "$ref": "#/rules@27"
             },
             "arguments": []
           },
@@ -1480,7 +1590,7 @@ export const StateDiagramGrammar = (): Grammar => loadedStateDiagramGrammar ?? (
                 "terminal": {
                   "$type": "RuleCall",
                   "rule": {
-                    "$ref": "#/rules@25"
+                    "$ref": "#/rules@27"
                   },
                   "arguments": []
                 }
@@ -1519,11 +1629,17 @@ export const StateDiagramGrammar = (): Grammar => loadedStateDiagramGrammar ?? (
                 "feature": "operator",
                 "operator": "=",
                 "terminal": {
-                  "$type": "RuleCall",
-                  "rule": {
-                    "$ref": "#/rules@26"
-                  },
-                  "arguments": []
+                  "$type": "Alternatives",
+                  "elements": [
+                    {
+                      "$type": "Keyword",
+                      "value": "!"
+                    },
+                    {
+                      "$type": "Keyword",
+                      "value": "-"
+                    }
+                  ]
                 }
               },
               {
@@ -1533,7 +1649,7 @@ export const StateDiagramGrammar = (): Grammar => loadedStateDiagramGrammar ?? (
                 "terminal": {
                   "$type": "RuleCall",
                   "rule": {
-                    "$ref": "#/rules@25"
+                    "$ref": "#/rules@27"
                   },
                   "arguments": []
                 }
@@ -1543,7 +1659,7 @@ export const StateDiagramGrammar = (): Grammar => loadedStateDiagramGrammar ?? (
           {
             "$type": "RuleCall",
             "rule": {
-              "$ref": "#/rules@27"
+              "$ref": "#/rules@29"
             },
             "arguments": []
           }
@@ -1555,19 +1671,11 @@ export const StateDiagramGrammar = (): Grammar => loadedStateDiagramGrammar ?? (
     },
     {
       "$type": "ParserRule",
-      "name": "UnaryOperator",
+      "name": "TemporalOperator",
       "dataType": "string",
       "definition": {
         "$type": "Alternatives",
         "elements": [
-          {
-            "$type": "Keyword",
-            "value": "!"
-          },
-          {
-            "$type": "Keyword",
-            "value": "-"
-          },
           {
             "$type": "Keyword",
             "value": "G"
@@ -1753,7 +1861,7 @@ export const StateDiagramGrammar = (): Grammar => loadedStateDiagramGrammar ?? (
                 "terminal": {
                   "$type": "RuleCall",
                   "rule": {
-                    "$ref": "#/rules@31"
+                    "$ref": "#/rules@33"
                   },
                   "arguments": []
                 }
@@ -1793,7 +1901,7 @@ export const StateDiagramGrammar = (): Grammar => loadedStateDiagramGrammar ?? (
                 "terminal": {
                   "$type": "RuleCall",
                   "rule": {
-                    "$ref": "#/rules@30"
+                    "$ref": "#/rules@32"
                   },
                   "arguments": []
                 }
@@ -1821,7 +1929,7 @@ export const StateDiagramGrammar = (): Grammar => loadedStateDiagramGrammar ?? (
           {
             "$type": "RuleCall",
             "rule": {
-              "$ref": "#/rules@31"
+              "$ref": "#/rules@33"
             },
             "arguments": []
           }

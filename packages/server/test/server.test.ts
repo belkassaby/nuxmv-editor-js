@@ -62,6 +62,42 @@ describe('REST API (fake nuXmv)', () => {
         expect(body.errors[0]).toMatch(/syntax error/);
     });
 
+    it('relays live state updates to subscribers over SSE', async () => {
+        const send = (channel: string, body: unknown) =>
+            fetch(`${url}/api/live/${channel}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+        await send('test-1', { state: 's0', step: 0 });
+
+        const controller = new AbortController();
+        const stream = await fetch(`${url}/api/live/test-1/stream`, { signal: controller.signal });
+        expect(stream.headers.get('content-type')).toContain('text/event-stream');
+        const reader = stream.body!.getReader();
+        const received: string[] = [];
+        const read = (async () => {
+            const decoder = new TextDecoder();
+            let buffer = '';
+            while (received.length < 2) {
+                const { value, done } = await reader.read();
+                if (done) break;
+                buffer += decoder.decode(value);
+                for (const m of buffer.matchAll(/^data: (.*)$/gm)) if (!received.includes(m[1])) received.push(m[1]);
+            }
+        })();
+        await new Promise(r => setTimeout(r, 50));
+        expect((await (await send('test-1', { state: 's1', step: 1, event: 'GO' })).json()).listeners).toBe(1);
+        await read;
+        controller.abort();
+        // The last update is replayed to a new subscriber, then new ones follow.
+        expect(received.map(r => JSON.parse(r).state)).toEqual(['s0', 's1']);
+        expect(JSON.parse(received[1]).event).toBe('GO');
+    });
+
+    it('validates live channels and updates', async () => {
+        const post = (path: string, body: unknown) =>
+            fetch(`${url}${path}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+        expect((await post('/api/live/bad%20name', { state: 's0' })).status).toBe(400);
+        expect((await post('/api/live/ok', { nostate: true })).status).toBe(400);
+    });
+
     it('reports a missing executable', async () => {
         const info = await nuxmvInfo({ executable: '/nonexistent/nuXmv', timeoutMs: 1000, maxOutputBytes: 1000 });
         expect(info.available).toBe(false);

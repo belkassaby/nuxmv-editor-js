@@ -211,6 +211,64 @@ not check what the LLM writes, nor that your implementation matches the diagram.
 sync (one code state per diagram state is the simplest way), and keep the facts you care about,
 such as approvals, counters and the active agent, as attributes so they can be checked.
 
+## From verified diagram to running Python
+
+A verified design is only useful if the running system follows it. The **Python** tab (and
+`File → Export`) turns the diagram into code:
+
+- **`<name>_fsm.py`**: a dependency-free module with `State` and `Event` enums, the labelling of
+  every state, and the verified transition table. `send(event)` only follows transitions of the
+  model; anything else raises `InvalidTransition`. `allowed_events()` lists the legal next steps,
+  which can be offered to an LLM as the `enum` of a tool parameter, so that it can only choose a
+  verified move. Subclass the machine and add `on_enter_<state>` / `on_exit_<state>` hooks for the
+  LLM calls, tools and human approvals.
+- **Runtime monitors.** Invariants and `G(φ)` properties where φ only looks at the present and the
+  past (`Y Z O H S T`) are compiled into incremental monitors that are checked after every
+  transition (`PropertyViolation` in strict mode). Future-time and CTL properties cannot be decided
+  on a running system; the module lists them as verified by nuXmv only. Tip: state guardrails in
+  past time, e.g. `G (phase = deploying -> Y (phase = release_decision & actor = human))`, so the
+  same formula is both model checked and monitored.
+- **Jupyter notebook** (`.ipynb`): writes the module, shows the machine as a diagram with the
+  current state highlighted (plain SVG, no dependency), a **live widget** (anywidget + Cytoscape.js)
+  that follows every transition, a walk through the model, an illegal event being rejected, the
+  LLM tool-schema pattern, hooks, and replays of the nuXmv counterexamples.
+- **Live link to the editor**: `fsm.link_editor("http://127.0.0.1:3000", channel="demo")` streams
+  each state change of any Python process to the editor. In the **Trace** tab choose *Live from
+  Python* with the same channel: the diagram highlights the current state, the visited states and
+  the possible next states, with a table of events, attribute values and monitor verdicts.
+
+```python
+import agentic_coding_loop_fsm as m
+
+fsm = m.AgenticCodingLoopFSM()
+fsm.link_editor(channel="demo")        # optional: follow it in the editor
+fsm.send("USER_SUBMIT")                # or the label as written: fsm.send("user_submit")
+fsm.allowed_events()                   # [PLAN_ACCEPTED, HUMAN_CLARIFIES]
+fsm.send("HUMAN_APPROVED")             # InvalidTransition: not allowed in state designing
+```
+
+Command line: `npx nxd python diagram.nxd -o diagram_fsm.py` and
+`npx nxd notebook diagram.nxd --verify` (runs nuXmv first to include verdicts and counterexamples).
+
+The test suite checks the generated code against nuXmv in both directions. Random walks along the
+verified transitions never trip a monitor of a property nuXmv proved. On a model with a planted
+defect, such as a hotfix path that bypasses the human release decision, the monitors report the
+same properties that nuXmv refutes.
+
+### Related tools
+
+Parts of this exist elsewhere; the combination is what this project adds. Python FSM libraries
+([transitions](https://github.com/pytransitions/transitions) with the Cytoscape-based live
+[transitions-gui](https://github.com/pytransitions/transitions-gui),
+[python-statemachine](https://python-statemachine.readthedocs.io/en/latest/diagram.html))
+draw and enforce machines but do not model check them. Agent frameworks such as
+[LangGraph Studio](https://docs.langchain.com/langsmith/studio), [Burr](https://burr.apache.org/)
+and [Stately](https://stately.ai/docs/inspector) visualise running graphs without temporal-logic
+verification. [Agentproof](https://arxiv.org/abs/2603.20356) checks agent-framework graphs
+statically and at run time against DFA policies, with no editor or model checker.
+[NuRV](https://es-static.fbk.eu/tools/nurv/), built on nuXmv, generates LTL runtime monitors,
+including in Python, with no diagram tooling. It is a natural back end for full-LTL monitors here.
+
 ## Architecture
 
 ```
@@ -222,10 +280,12 @@ packages/
 │   ├── src/serializer.ts               DiagramModel -> .nxd text
 │   ├── src/smv-generator.ts            DiagramModel -> nuXmv model
 │   ├── src/nuxmv-output.ts             nuXmv output -> verdicts + traces
+│   ├── src/python-generator.ts         DiagramModel -> Python runtime + monitors
+│   ├── src/notebook-generator.ts       DiagramModel -> Jupyter notebook
 │   └── src/legacy-attributes.ts        import of JungToNusmv attributeData.txt
 ├── server/     @nuxmv-editor/server    Node.js + Express
 │   ├── src/nuxmv-runner.ts             spawns nuXmv (BDD / BMC / IC3), timeouts
-│   ├── src/app.ts                      REST API, serves the built UI
+│   ├── src/app.ts                      REST API, live channel (SSE), serves the built UI
 │   └── src/cli.ts                      `nxd generate|check`
 └── app/        @nuxmv-editor/app       Angular UI
     └── src/app/
@@ -384,6 +444,8 @@ Exit codes: `0` if every property holds, `3` if a property is false, `1` on erro
 | ------ | ------------- | ----------------------------------------------------------------------------------------------- |
 | GET    | `/api/health` | returns nuXmv availability and version                                                          |
 | POST   | `/api/verify` | `{ "model": "<smv>" }` or `{ "diagram": "<nxd>" }`, plus `engine` (`bdd`/`bmc`/`ic3`) and `bound` |
+| POST   | `/api/live/<channel>` | a state update `{ state, event?, step?, values?, violations? }` from a running machine |
+| GET    | `/api/live/<channel>/stream` | Server-Sent Events stream of those updates (the last one first) |
 
 The response contains the raw `stdout`/`stderr` and the parsed `results` (property, verdict, trace),
 `errors` and `warnings`.

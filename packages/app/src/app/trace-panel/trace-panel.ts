@@ -1,5 +1,8 @@
+import { KeyValuePipe } from '@angular/common';
 import { Component, computed, inject, OnDestroy, signal } from '@angular/core';
 import { DiagramStore } from '../diagram-store';
+import { LiveLink } from '../live-link';
+import { CodeExport } from '../code-export';
 
 /**
  * Step-by-step view of a counterexample returned by nuXmv, shown on the
@@ -7,11 +10,16 @@ import { DiagramStore } from '../diagram-store';
  */
 @Component({
     selector: 'app-trace-panel',
+    imports: [KeyValuePipe],
     templateUrl: './trace-panel.html'
 })
 export class TracePanel implements OnDestroy {
     readonly store = inject(DiagramStore);
+    readonly live = inject(LiveLink);
+    readonly code = inject(CodeExport);
     readonly playing = signal(false);
+    readonly origin = location.origin;
+    readonly liveRows = computed(() => [...this.live.updates()].reverse().slice(0, 50));
     private timer: ReturnType<typeof setInterval> | undefined;
 
     readonly spec = computed(() => {
@@ -55,6 +63,7 @@ export class TracePanel implements OnDestroy {
 
     close(): void {
         this.stop();
+        this.live.disconnect();
         this.store.stopHighlight();
     }
 

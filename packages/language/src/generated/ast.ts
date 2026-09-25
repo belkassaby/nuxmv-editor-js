@@ -460,6 +460,12 @@ export function isSymbolValue(item: unknown): item is SymbolValue {
     return reflection.isInstance(item, SymbolValue.$type);
 }
 
+export type TemporalOperator = 'AF' | 'AG' | 'AX' | 'EF' | 'EG' | 'EX' | 'F' | 'G' | 'H' | 'O' | 'X' | 'Y' | 'Z';
+
+export function isTemporalOperator(item: unknown): item is TemporalOperator {
+    return item === 'G' || item === 'F' || item === 'X' || item === 'Y' || item === 'Z' || item === 'H' || item === 'O' || item === 'AG' || item === 'AF' || item === 'AX' || item === 'EG' || item === 'EF' || item === 'EX';
+}
+
 export interface Transition extends langium.AstNode {
     readonly $container: Diagram;
     readonly $type: 'Transition';
@@ -483,7 +489,7 @@ export interface UnaryExpression extends langium.AstNode {
     readonly $container: BinaryExpression | Fairness | PathQuantifiedExpression | Specification | UnaryExpression;
     readonly $type: 'UnaryExpression';
     operand: Expression;
-    operator: UnaryOperator;
+    operator: '!' | '-' | TemporalOperator;
 }
 
 export const UnaryExpression = {
@@ -494,12 +500,6 @@ export const UnaryExpression = {
 
 export function isUnaryExpression(item: unknown): item is UnaryExpression {
     return reflection.isInstance(item, UnaryExpression.$type);
-}
-
-export type UnaryOperator = '!' | '-' | 'AF' | 'AG' | 'AX' | 'EF' | 'EG' | 'EX' | 'F' | 'G' | 'H' | 'O' | 'X' | 'Y' | 'Z';
-
-export function isUnaryOperator(item: unknown): item is UnaryOperator {
-    return item === '!' || item === '-' || item === 'G' || item === 'F' || item === 'X' || item === 'Y' || item === 'Z' || item === 'H' || item === 'O' || item === 'AG' || item === 'AF' || item === 'AX' || item === 'EG' || item === 'EF' || item === 'EX';
 }
 
 export type StateDiagramAstType = {

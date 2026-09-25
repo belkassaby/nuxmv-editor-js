@@ -1,13 +1,17 @@
 #!/usr/bin/env node
 import { readFile, writeFile } from 'node:fs/promises';
 import { parseArgs } from 'node:util';
-import { generateSmv, matchResults, parseDiagram } from '@nuxmv-editor/language';
+import { generateNotebook, generatePython, generateSmv, matchResults, parseDiagram } from '@nuxmv-editor/language';
 import { configFromEnv, ENGINES, runNuxmv, type Engine } from './nuxmv-runner.js';
 
 const USAGE = `Usage:
   nxd generate <diagram.nxd> [-o model.smv]      write the nuXmv model
   nxd check <diagram.nxd> [--engine bdd|bmc|ic3] [--bound N]
-                                                 verify the specifications with nuXmv (NUXMV_PATH)`;
+                                                 verify the specifications with nuXmv (NUXMV_PATH)
+  nxd python <diagram.nxd> [-o module.py]        write the Python implementation of the state machine
+  nxd notebook <diagram.nxd> [-o notebook.ipynb] [--verify]
+                                                 write a Jupyter notebook showcasing it; --verify runs
+                                                 nuXmv first to include verdicts and counterexamples`;
 
 async function main(): Promise<number> {
     const { positionals, values } = parseArgs({
@@ -16,7 +20,8 @@ async function main(): Promise<number> {
             output: { type: 'string', short: 'o' },
             engine: { type: 'string', default: 'bdd' },
             bound: { type: 'string', default: '10' },
-            help: { type: 'boolean', short: 'h' }
+            help: { type: 'boolean', short: 'h' },
+            verify: { type: 'boolean', default: false }
         }
     });
     const [command, file] = positionals;
@@ -35,6 +40,32 @@ async function main(): Promise<number> {
     if (command === 'generate') {
         if (values.output) await writeFile(values.output, text, 'utf8');
         else process.stdout.write(text);
+        return 0;
+    }
+    if (command === 'python') {
+        const py = await generatePython(parsed.model, { sourceName: file });
+        if (values.output) await writeFile(values.output, py.code, 'utf8');
+        else process.stdout.write(py.code);
+        return 0;
+    }
+    if (command === 'notebook') {
+        let verdicts: Array<string | undefined> | undefined;
+        let counterexamples: Array<{ property: string; states: string[]; loopStart?: number }> | undefined;
+        if (values.verify) {
+            const result = await runNuxmv(text, { engine: 'bdd' }, configFromEnv());
+            result.errors.forEach(e => console.error(e));
+            const matched = matchResults(parsed.model.specs, result.results);
+            verdicts = matched.map(r => r?.verdict);
+            counterexamples = matched.flatMap((r, i) =>
+                r?.trace
+                    ? [{ property: parsed.model.specs[i].name ?? parsed.model.specs[i].expression, states: r.trace.steps.map(s => s.values['state'] ?? ''), loopStart: r.trace.loopStart }]
+                    : []
+            );
+        }
+        const { notebook, python } = await generateNotebook(parsed.model, { sourceName: file, verdicts, counterexamples });
+        const out = values.output ?? `${python.moduleName}.ipynb`;
+        await writeFile(out, notebook, 'utf8');
+        console.log(`wrote ${out}`);
         return 0;
     }
     if (command === 'check') {

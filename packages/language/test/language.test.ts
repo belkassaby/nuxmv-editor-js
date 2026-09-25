@@ -64,6 +64,17 @@ describe('parser', () => {
         }
     });
 
+    it('parses temporal operators with nuXmv precedence', async () => {
+        const { ast } = await parseDiagram('attributes { p : boolean; s : { a, b }; }\nstate s0 { p = TRUE, s = a }\ns0 -> s0;\nLTLSPEC G (p -> F s = b);\nLTLSPEC ! F p & X s = a;');
+        const specs = ast.elements.filter(e => e.$type === 'Specification');
+        const shape = (e: any): string =>
+            e.$type === 'BinaryExpression' ? `(${shape(e.left)} ${e.operator} ${shape(e.right)})`
+            : e.$type === 'UnaryExpression' ? `${e.operator}[${shape(e.operand)}]`
+            : e.$type === 'NameReference' ? e.name : String(e.value ?? e.$type);
+        expect(shape((specs[0] as any).expression)).toBe('G[(p -> F[(s = b)])]');
+        expect(shape((specs[1] as any).expression)).toBe('(![F[p]] & X[(s = a)])');
+    });
+
     it('reports syntax errors', async () => {
         const outcome = await parseDiagram('state s0 {');
         expect(outcome.hasSyntaxErrors).toBe(true);

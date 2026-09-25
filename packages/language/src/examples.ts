@@ -277,7 +277,7 @@ CTLSPEC NAME no_dead_ends := AG EX TRUE;
         title: 'Human-in-the-loop tool approval',
         group: 'Agentic AI patterns',
         description: 'A human must approve every tool call. Safety holds (no tool use without approval), but repeated denials can keep the agent from finishing.',
-        expected: ['true', 'true', 'true', 'false'],
+        expected: ['true', 'true', 'true', 'true', 'false'],
         source: `// Tool approval (after adamterlson/AgenticStateMachines, human_in_the_loop.ts)
 diagram ToolApproval
 
@@ -301,6 +301,8 @@ done -> done;
 
 CTLSPEC NAME no_tool_without_approval := AG (!awaiting_human -> AX !tool_active);
 LTLSPEC NAME human_is_consulted := G (X tool_active -> awaiting_human);
+// The same guardrail stated over the past, so it is also monitored at run time.
+LTLSPEC NAME approval_precedes_tool := G (tool_active -> Y awaiting_human);
 LTLSPEC NAME approval_is_answered := G (awaiting_human -> X !awaiting_human);
 LTLSPEC NAME always_finishes := F finished;
 `

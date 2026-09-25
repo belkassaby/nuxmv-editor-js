@@ -15,6 +15,9 @@
           <button type="button" role="menuitem" (click)="exportSmv()">Export nuXmv model (.smv)</button>
           <button type="button" role="menuitem" (click)="exportPng()">Export diagram (.png)</button>
           <button type="button" role="menuitem" (click)="exportSvg()">Export diagram (.svg)</button>
+          <hr />
+          <button type="button" role="menuitem" (click)="codeExport.downloadPython()">Export Python implementation (.py)</button>
+          <button type="button" role="menuitem" (click)="codeExport.downloadNotebook()">Export Jupyter notebook (.ipynb)</button>
         </div>
       }
     </div>
@@ -132,6 +135,7 @@
         @case ('properties') { <app-properties-panel /> }
         @case ('trace') { <app-trace-panel /> }
         @case ('model') { <app-output-panel view="model" /> }
+        @case ('python') { <app-output-panel view="python" /> }
         @case ('console') { <app-output-panel view="console" /> }
       }
     </div>
