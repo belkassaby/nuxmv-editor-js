@@ -1,5 +1,5 @@
 import { effect, Injectable, inject, signal } from '@angular/core';
-import { exportToFramework, generateNotebook, generatePython, generatePythonTests, type Framework, type GeneratedPython } from '@nuxmv-editor/language';
+import { exportToFramework, generateNotebook, generatePython, generatePythonTests, walkThrough, type Framework, type GeneratedPython } from '@nuxmv-editor/language';
 import { DiagramStore } from './diagram-store';
 import { downloadText } from './file-io';
 
@@ -59,6 +59,51 @@ export class CodeExport {
         } catch (error) {
             this.nurvStatus.set(`NuRV: ${(error as Error).message}`);
         }
+    }
+
+    /**
+     * A single, self-contained Python file: the generated module plus a main
+     * that links to the editor on `channel`, walks through the model slowly and
+     * then keeps listening for events sent from the editor.
+     */
+    async downloadLiveDemo(channel: string): Promise<void> {
+        const model = this.store.model();
+        const py = await generatePython(model, { sourceName: this.store.fileName() });
+        const walk = await walkThrough(model, py);
+        const demo = `
+
+# --------------------------------------------------------------------------
+# Live demo: run   python3 ${py.moduleName}_live_demo.py
+# The diagram in nuxmv-editor (Trace -> Live from Python, channel "${channel}") follows this process.
+# --------------------------------------------------------------------------
+if __name__ == "__main__":
+    import sys
+    import time
+
+    url = sys.argv[1] if len(sys.argv) > 1 else ${JSON.stringify(location.origin)}
+    fsm = ${py.className}(on_invalid="return")
+    fsm.link_editor(url, channel=${JSON.stringify(channel)}, commands=True)
+    print("Linked to %s, channel ${channel}. Watch the diagram in the editor." % url, flush=True)
+    time.sleep(1.5)
+    # Walk through the model, stopping one step before the end so that the last move
+    # can be made from the editor.
+    for event in ${JSON.stringify(walk.events.length > 1 ? walk.events.slice(0, -1) : walk.events)}:
+        fsm.send(event)
+        print("%-32s -> %s" % (event, fsm.state.value), flush=True)
+        time.sleep(1.5)
+    print("Now in %s. Send the next event from the editor (the ▶ buttons: %s); Ctrl+C to stop."
+          % (fsm.state.value, ", ".join(e.value for e in fsm.allowed_events()) or "none"), flush=True)
+    try:
+        last = len(fsm.history)
+        for _ in range(300):
+            time.sleep(1)
+            if len(fsm.history) != last:
+                last = len(fsm.history)
+                print("from the editor: %-20s -> %s" % (fsm.history[-1]["event"], fsm.state.value), flush=True)
+    except KeyboardInterrupt:
+        pass
+`;
+        downloadText(`${py.moduleName}_live_demo.py`, py.code + demo, 'text/x-python');
     }
 
     async downloadTests(): Promise<void> {

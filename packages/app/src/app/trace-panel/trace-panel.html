@@ -19,7 +19,13 @@
   }
   @if (live.updates().length === 0) {
     <div class="pad">
-      <p>Waiting for the running state machine. In Python (the generated module or notebook):</p>
+      <p><strong>Listening, but no Python process is sending states yet.</strong> The diagram moves when a Python program that runs this machine links to channel <code>{{ live.channel() }}</code>:</p>
+      <ol>
+        <li><button type="button" class="primary" (click)="code.downloadLiveDemo(live.channel())">Download live demo script</button> <span class="muted small">(the module + a walk-through, one file)</span></li>
+        <li>Run it in a terminal: <code>python3 {{ code.python()?.moduleName ?? 'module' }}_live_demo.py</code></li>
+        <li>Watch the diagram follow it here, then use the ▶ event buttons to drive it.</li>
+      </ol>
+      <p class="muted small">In your own code or notebook, use the generated module (Python tab) and link the machine yourself:</p>
       <pre class="code small">fsm = {{ code.python()?.moduleName ?? 'module' }}.{{ code.python()?.className ?? 'FSM' }}()
 fsm.link_editor("{{ origin }}", channel="{{ live.channel() }}", commands=True)
 fsm.send(...)   # every transition moves the diagram here</pre>
