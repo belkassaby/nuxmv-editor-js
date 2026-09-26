@@ -262,7 +262,7 @@ describe('POST /api/extract (code base models)', () => {
     it('analyses a folder of the server by path, with the models as .pflow text', async () => {
         const url = await start(true);
         expect((await (await fetch(`${url}/api/health`)).json()).extract).toMatchObject({ paths: true, apply: true });
-        const res = await extract(url, { path: SHOP });
+        const res = await extract(url, { path: SHOP, quickFixes: 0 });
         expect(res.status).toBe(200);
         const body = await res.json();
         expect(body.checkedWith).toBe('explicit');
@@ -277,7 +277,7 @@ describe('POST /api/extract (code base models)', () => {
         const files = {
             'src/poller.ts': 'export class Poller {\n    private timer?: ReturnType<typeof setInterval>;\n    start(): void {\n        this.timer = setInterval(() => undefined, 1000);\n    }\n    stop(): void {\n        clearInterval(this.timer);\n    }\n}\n'
         };
-        const body = await (await extract(url, { files, config: { ignore: [] } })).json();
+        const body = await (await extract(url, { files, config: { ignore: [] }, quickFixes: 0 })).json();
         expect(body.root).toBe('(uploaded folder)');
         expect(body.findings.map((f: { rule: string }) => f.rule)).toContain('resource-leak');
     });
