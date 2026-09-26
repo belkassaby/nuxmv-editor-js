@@ -1,7 +1,27 @@
 import { Component, ElementRef, OnDestroy, afterNextRender, effect, input, untracked, viewChild } from '@angular/core';
+import { LanguageDescription, syntaxHighlighting, type LanguageSupport } from '@codemirror/language';
+import { languages } from '@codemirror/language-data';
 import { MergeView } from '@codemirror/merge';
 import { EditorState } from '@codemirror/state';
 import { EditorView, lineNumbers } from '@codemirror/view';
+import { classHighlighter } from '@lezer/highlight';
+
+/** Loaded languages, by name: each grammar is fetched once, the first time a file needs it. */
+const loaded = new Map<string, Promise<LanguageSupport>>();
+
+/** Syntax of a file from its name (TypeScript, Python, Java, Kotlin, Groovy, Scala, C, C++, C#, Go, Rust, Swift, Ruby, PHP, R...). */
+export function languageFor(file: string): Promise<LanguageSupport | undefined> {
+    // Angular component templates and a few extensions language-data names differently.
+    const name = file.replace(/\.(mts|cts)$/, '.ts').replace(/\.gradle$/, '.groovy').replace(/\.kts$/, '.kt').replace(/\.sc$/, '.scala');
+    const description = LanguageDescription.matchFilename(languages, name) ?? (/\.[Rr]$/.test(name) ? LanguageDescription.matchLanguageName(languages, 'R') : null);
+    if (!description) return Promise.resolve(undefined);
+    let support = loaded.get(description.name);
+    if (!support) {
+        support = description.load();
+        loaded.set(description.name, support);
+    }
+    return support.catch(() => undefined as unknown as LanguageSupport);
+}
 
 /**
  * Original code on the left, proposed code on the right, side by side, with the changed lines
@@ -17,17 +37,20 @@ import { EditorView, lineNumbers } from '@codemirror/view';
 export class CodeDiff implements OnDestroy {
     readonly before = input.required<string>();
     readonly after = input.required<string>();
+    /** File name: chooses the syntax highlighting. */
+    readonly file = input('');
     private readonly host = viewChild.required<ElementRef<HTMLElement>>('host');
     private view?: MergeView;
 
     constructor() {
-        afterNextRender(() => this.create());
-        // Another file or change: rebuild with its texts.
+        afterNextRender(() => void this.create());
+        // Another file or change: rebuild with its texts and language.
         effect(() => {
             const before = this.before();
             const after = this.after();
+            const file = this.file();
             untracked(() => {
-                if (this.view) this.create(before, after);
+                if (this.view) void this.create(before, after, file);
             });
         });
     }
@@ -37,9 +60,15 @@ export class CodeDiff implements OnDestroy {
         return this.view?.b.state.doc.toString() ?? this.after();
     }
 
-    private create(before = this.before(), after = this.after()): void {
+    private generation = 0;
+
+    private async create(before = this.before(), after = this.after(), file = this.file()): Promise<void> {
+        const generation = ++this.generation;
+        const language = await languageFor(file);
+        if (generation !== this.generation) return; // a newer file was asked for meanwhile
         this.view?.destroy();
-        const common = [lineNumbers(), EditorView.lineWrapping];
+        // Token classes (tok-keyword, tok-string...) coloured in styles.css, for light and dark themes.
+        const common = [lineNumbers(), EditorView.lineWrapping, syntaxHighlighting(classHighlighter), ...(language ? [language] : [])];
         this.view = new MergeView({
             a: { doc: before, extensions: [...common, EditorState.readOnly.of(true), EditorView.editable.of(false)] },
             b: { doc: after, extensions: common },

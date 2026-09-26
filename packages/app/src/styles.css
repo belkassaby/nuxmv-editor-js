@@ -278,3 +278,29 @@ dialog.code-import header h2 { flex: 1; }
 .code-diff .cm-merge-a .cm-changedText { background: rgb(248 81 73 / 30%); }
 .code-diff .cm-merge-b .cm-changedText { background: rgb(46 160 67 / 30%); }
 .code-diff .cm-collapsedLines { color: var(--muted); background: var(--hover); }
+
+/* Syntax colours of code (token classes of @lezer/highlight's classHighlighter) */
+:root {
+  --tok-keyword: #a626a4; --tok-string: #2a7e1e; --tok-comment: #7b8794; --tok-number: #b35d00;
+  --tok-type: #b3261e; --tok-function: #2f5fc4; --tok-property: #16708a; --tok-operator: #5c6773; --tok-meta: #8c6d1f;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --tok-keyword: #d19bff; --tok-string: #9fd88e; --tok-comment: #8b98a5; --tok-number: #ffb86b;
+    --tok-type: #ff9b8f; --tok-function: #8fb8ff; --tok-property: #7fd6e8; --tok-operator: #aeb9c4; --tok-meta: #e6c56a;
+  }
+}
+:root[data-theme='dark'] {
+  --tok-keyword: #d19bff; --tok-string: #9fd88e; --tok-comment: #8b98a5; --tok-number: #ffb86b;
+  --tok-type: #ff9b8f; --tok-function: #8fb8ff; --tok-property: #7fd6e8; --tok-operator: #aeb9c4; --tok-meta: #e6c56a;
+}
+.code-diff .tok-keyword, .code-diff .tok-controlKeyword, .code-diff .tok-definitionKeyword, .code-diff .tok-modifier, .code-diff .tok-moduleKeyword, .code-diff .tok-operatorKeyword { color: var(--tok-keyword); }
+.code-diff .tok-string, .code-diff .tok-string2, .code-diff .tok-character, .code-diff .tok-regexp { color: var(--tok-string); }
+.code-diff .tok-comment, .code-diff .tok-lineComment, .code-diff .tok-blockComment, .code-diff .tok-docComment { color: var(--tok-comment); font-style: italic; }
+.code-diff .tok-number, .code-diff .tok-bool, .code-diff .tok-atom, .code-diff .tok-null, .code-diff .tok-literal { color: var(--tok-number); }
+.code-diff .tok-typeName, .code-diff .tok-className, .code-diff .tok-namespace { color: var(--tok-type); }
+.code-diff .tok-variableName.tok-definition, .code-diff .tok-function, .code-diff .tok-macroName { color: var(--tok-function); }
+.code-diff .tok-propertyName, .code-diff .tok-attributeName, .code-diff .tok-labelName { color: var(--tok-property); }
+.code-diff .tok-operator, .code-diff .tok-punctuation { color: var(--tok-operator); }
+.code-diff .tok-meta, .code-diff .tok-annotation, .code-diff .tok-processingInstruction { color: var(--tok-meta); }
+.code-diff .tok-invalid { color: var(--error); }

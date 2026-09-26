@@ -77,7 +77,7 @@
       }
       @if (f.suggestedPatch!.files?.[fileIndex()]; as pf) {
         <p class="mono small code-review-file">{{ pf.file }} @if (codeImport.applied().has(pf.file)) { <span class="badge ok">applied</span> }</p>
-        <app-code-diff [before]="pf.before" [after]="pf.after" />
+        <app-code-diff [before]="pf.before" [after]="pf.after" [file]="pf.file" />
         <div class="code-review-actions">
           <button type="button" class="primary" (click)="applyChange()" [disabled]="!report()?.applicable || codeImport.applied().has(pf.file)" [title]="report()?.applicable ? 'Write the proposed text (with your edits) to ' + pf.file : 'Only folders analysed by path on a local server can be changed: download the file instead'">Apply to {{ pf.file.split('/').pop() }}</button>
           <button type="button" (click)="downloadChange()">Download file</button>
