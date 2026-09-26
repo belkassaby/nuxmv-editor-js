@@ -35,6 +35,8 @@ export interface Finding {
     counterexample?: CounterexampleStep[];
     /** How the finding was established. */
     source: 'analysis' | 'nuxmv' | 'graph' | 'llm';
+    /** Code values of the states the finding is about (e.g. the unreachable value). */
+    states?: string[];
     /** A proposed code change (quick fix or LLM) and whether re-running every check confirmed it. */
     suggestedPatch?: SuggestedPatch;
 }
@@ -54,6 +56,20 @@ export interface SuggestedPatch {
     note: string;
     /** `quick fix` or the LLM provider that proposed it. */
     by?: string;
+    /** Models whose extraction changes with the patch: before and after, and their false properties. */
+    models?: ModelChange[];
+}
+
+/** A model re-extracted from the changed code. */
+export interface ModelChange {
+    id: string;
+    subject: string;
+    /** .pflow text before the change ('' if the model is new). */
+    before: string;
+    /** .pflow text after the change ('' if the model disappears). */
+    after: string;
+    falseBefore: string[];
+    falseAfter: string[];
 }
 
 export interface Evidence {
@@ -90,6 +106,12 @@ export interface ExtractedModel {
     /** State id -> value in the code. */
     values: Record<string, string>;
     notes: string[];
+    /** Values in which the machine may rest (declared in the config, or by their names). */
+    terminal?: string[];
+    /** Key of the machine in provenflow.config.json `machines`. */
+    configKey?: string;
+    /** The state variable a state machine was extracted from. */
+    variableId?: string;
 }
 
 export class ModelBuilder {

@@ -380,6 +380,8 @@ written to your files until you apply a change.
 | --- | --- | --- |
 | `unhandled-state`, `non-exhaustive-dispatch` | the missing values become explicit cases that do nothing (`case 'x': break; // pflow: ...`, Go `case A, B:`, Python `case A \| B: pass`), spelled like the existing labels (`State.X`, `State::X`, `'x'`) | unchanged: those values did nothing before either; the choice is now visible |
 | `stale-write-after-await` | `if (<state> !== <value checked before>) return;` just before the write (TypeScript/JavaScript, Python) | returns early when another method changed the state during the await |
+| `unreachable-state` (a declared value nothing sets, tests or handles) | the value is removed from its declaration: union type, enum (TypeScript, Python, Java, Kotlin, Groovy, Scala, C, C++, C#, Go, Rust, Swift, PHP) | unchanged: no code used it. Values still tested somewhere are left alone (that branch is dead code to remove by hand) |
+| `stuck-state`, `cannot-settle` | the state is declared final in `provenflow.config.json` (`machines[...].terminal`, keeping the final states already assumed) | the code is unchanged; accept it only if the state really is final, otherwise add the transition out of it |
 | `resource-leak` | release the previous resource before acquiring again (`clearInterval`, `close()`, `disconnect()`, `unsubscribe()`), and add `dispose()` (`ngOnDestroy` for Angular components) releasing it (TypeScript/JavaScript) | the resource can no longer be lost |
 
 In the editor, **Review change** opens a side-by-side view:
@@ -390,6 +392,18 @@ In the editor, **Review change** opens a side-by-side view:
   only if the file still matches what was analysed; otherwise the server answers 409.
 - **Download file** and **Copy** give you the text;
 - **Run the analysis again** checks the whole project with the change.
+
+**Findings and models.** A model is what was extracted from the code, and its properties say
+what the code should satisfy. A finding is a problem. Most findings are a property that nuXmv
+found false; the others come from direct checks (missing cases, layers, style).
+
+In the editor, **Models → Properties** shows every property of a model:
+- its verdict, and for a false one the finding with its explanation and fix;
+- **Review the code change**, when a change is proposed;
+- **Model after the change:** the model re-extracted from the changed code, next to the current
+  one (`.pflow` side by side), with the false properties before and after.
+
+A change's patch carries these model diffs (`suggestedPatch.models` in report.json).
 
 The **Code changes** tab lists every proposal with its verification. From the terminal, `--fix`
 writes each change to `fixes/NN-rule/` (the changed files and `change.patch`), and report.md shows

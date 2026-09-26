@@ -18,8 +18,10 @@
  */
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { CONFIG_FILE, type ProvenflowConfig } from './config.js';
 import type { Facts, ResourceKind } from './ir.js';
-import type { ExtractedModel, Finding, PatchFile } from './models.js';
+import { modelToPflow, type ExtractedModel, type Finding, type ModelChange, type PatchFile } from './models.js';
+import type { SpecVerdict } from './verify.js';
 
 export interface Edit {
     file: string;
@@ -35,13 +37,33 @@ export interface Proposal {
     by: string;
 }
 
-/** Re-runs the analysis with some files replaced and returns the findings. */
-export type Rerun = (overrides: Map<string, string>) => Promise<Finding[]>;
+/** What a re-run of the analysis on changed files gives back. */
+export interface RerunResult {
+    findings: Finding[];
+    models: ExtractedModel[];
+    verdicts: SpecVerdict[];
+}
+
+/** Re-runs the analysis with some files replaced. */
+export type Rerun = (overrides: Map<string, string>) => Promise<RerunResult>;
+
+/** The models and verdicts before any change, to show each model as it becomes. */
+export interface Baseline {
+    models: ExtractedModel[];
+    verdicts: SpecVerdict[];
+}
 
 const key = (f: Finding) => `${f.rule}|${f.subject}|${f.loc?.file ?? ''}`;
 
 /** Applies each proposal in memory, re-runs every check, and attaches the verified (or not) patch to its finding. */
-export async function verifyProposals(findings: Finding[], proposals: Proposal[], root: string, rerun: Rerun, read: (file: string) => string | undefined = f => readSafe(join(root, f))): Promise<{ findings: Finding[]; accepted: string[]; rejected: string[] }> {
+export async function verifyProposals(
+    findings: Finding[],
+    proposals: Proposal[],
+    root: string,
+    rerun: Rerun,
+    read: (file: string) => string | undefined = f => readSafe(join(root, f)),
+    baseline?: Baseline
+): Promise<{ findings: Finding[]; accepted: string[]; rejected: string[] }> {
     const accepted: string[] = [];
     const rejected: string[] = [];
     const before = new Set(findings.map(key));
@@ -51,6 +73,10 @@ export async function verifyProposals(findings: Finding[], proposals: Proposal[]
         let problem = '';
         for (const e of p.edits) {
             const current = overrides.get(e.file) ?? read(e.file);
+            if (current === undefined && e.search === '') {
+                overrides.set(e.file, e.replace); // a new file (e.g. provenflow.config.json)
+                continue;
+            }
             if (current === undefined || e.search === '' || current.split(e.search).length !== 2) {
                 problem = `the edit for ${e.file} does not match the file exactly once`;
                 break;
@@ -64,36 +90,154 @@ export async function verifyProposals(findings: Finding[], proposals: Proposal[]
             rejected.push(`${p.by}: ${p.finding.rule} ${p.finding.subject}: ${problem}`);
             continue;
         }
-        const after = await rerun(overrides);
+        const rerunResult = await rerun(overrides);
+        const after = rerunResult.findings;
         const stillThere = after.some(x => key(x) === key(p.finding));
         const added = after.filter(x => !before.has(key(x)) && x.severity !== 'info');
+        const models = baseline ? modelChanges(baseline, rerunResult) : undefined;
         const verified = !stillThere && added.length === 0;
         const note = verified
             ? `${p.explanation} Re-running every check on the changed code: the finding is gone and nothing new appears.`
             : stillThere
               ? `${p.explanation} The finding is still reported on the changed code.`
               : `${p.explanation} The change introduces: ${[...new Set(added.map(x => x.rule))].join(', ')}.`;
-        patched.set(p.finding, { ...p.finding, suggestedPatch: { diff, files, verified, note, by: p.by } });
+        patched.set(p.finding, { ...p.finding, suggestedPatch: { diff, files, verified, note, by: p.by, models } });
         (verified ? accepted : rejected).push(`${p.by}: ${p.finding.rule} ${p.finding.subject}: ${verified ? 'verified' : 'not verified'}`);
     }
     return { findings: findings.map(f => patched.get(f) ?? f), accepted, rejected };
 }
 
+/** Models whose .pflow text changes between two runs, with the properties false before and after. */
+function modelChanges(before: Baseline, after: RerunResult): ModelChange[] {
+    const falseOf = (verdicts: SpecVerdict[], id: string) => verdicts.filter(v => v.model === id && v.verdict === 'false').map(v => v.spec);
+    const ids = [...new Set([...before.models.map(m => m.id), ...after.models.map(m => m.id)])];
+    const out: ModelChange[] = [];
+    for (const id of ids) {
+        const a = before.models.find(m => m.id === id);
+        const b = after.models.find(m => m.id === id);
+        const textA = a ? modelToPflow(a) : '';
+        const textB = b ? modelToPflow(b) : '';
+        if (textA === textB) continue;
+        out.push({ id, subject: (a ?? b)!.subject, before: textA, after: textB, falseBefore: falseOf(before.verdicts, id), falseAfter: falseOf(after.verdicts, id) });
+    }
+    return out;
+}
+
 // ------------------------------------------------------------------ quick fixes
 
-export function quickFixes(findings: Finding[], facts: Facts, models: ExtractedModel[], read: (file: string) => string | undefined): Proposal[] {
+export function quickFixes(findings: Finding[], facts: Facts, models: ExtractedModel[], read: (file: string) => string | undefined, config: ProvenflowConfig = {}): Proposal[] {
     const proposals: Proposal[] = [];
     for (const f of findings) {
         if (f.suggestedPatch || !f.loc) continue;
-        const text = read(f.loc.file);
-        if (text === undefined) continue;
         let p: Proposal | undefined;
-        if (f.rule === 'unhandled-state' || f.rule === 'non-exhaustive-dispatch') p = missingCases(f, facts, text);
-        else if (f.rule === 'stale-write-after-await') p = recheckAfterAwait(f, facts, text);
-        else if (f.rule === 'resource-leak') p = releaseResource(f, facts, models, text);
+        if (f.category === 'state-machine' && (f.rule === 'stuck-state' || f.rule === 'cannot-settle')) {
+            p = declareTerminal(f, models, read, config);
+        } else if (f.category === 'state-machine' && f.rule === 'unreachable-state') {
+            p = removeUnusedValue(f, facts, models, read);
+        } else {
+            const text = read(f.loc.file);
+            if (text === undefined) continue;
+            if (f.rule === 'unhandled-state' || f.rule === 'non-exhaustive-dispatch') p = missingCases(f, facts, text);
+            else if (f.rule === 'stale-write-after-await') p = recheckAfterAwait(f, facts, text);
+            else if (f.rule === 'resource-leak') p = releaseResource(f, facts, models, text);
+        }
         if (p) proposals.push(p);
     }
     return proposals;
+}
+
+/** Declares the state(s) the machine cannot leave as final in provenflow.config.json (keeping the other final states). */
+function declareTerminal(f: Finding, models: ExtractedModel[], read: (file: string) => string | undefined, config: ProvenflowConfig): Proposal | undefined {
+    const model = models.find(m => m.id === f.model);
+    if (!model?.configKey) return undefined;
+    const states = f.rule === 'stuck-state' ? (f.states ?? []) : [f.counterexample?.[f.counterexample.length - 1]?.state].filter((x): x is string => !!x);
+    if (states.length === 0) return undefined;
+    const existing = read(CONFIG_FILE);
+    let current: ProvenflowConfig;
+    try {
+        current = existing ? (JSON.parse(existing) as ProvenflowConfig) : { ...config };
+    } catch {
+        return undefined;
+    }
+    const machines = { ...(current.machines ?? {}) };
+    const entry = { ...(machines[model.configKey] ?? {}) };
+    const terminal = [...new Set([...(entry.terminal ?? model.terminal ?? []), ...states])];
+    entry.terminal = terminal;
+    machines[model.configKey] = entry;
+    const next = `${JSON.stringify({ ...current, machines }, null, 2)}\n`;
+    return {
+        finding: f,
+        edits: [{ file: CONFIG_FILE, search: existing ?? '', replace: next }],
+        explanation: `If ${states.map(s => `'${s}'`).join(', ')} ${states.length > 1 ? 'are final states' : 'is a final state'} of ${model.configKey} (the code intends to stop there), declares it in provenflow.config.json. Otherwise the fix is in the code: add the transition out of it.`,
+        by: 'quick fix'
+    };
+}
+
+/** Removes a value no code sets, tests or handles from its declaration (a union type or an enum). */
+function removeUnusedValue(f: Finding, facts: Facts, models: ExtractedModel[], read: (file: string) => string | undefined): Proposal | undefined {
+    const model = models.find(m => m.id === f.model);
+    const value = f.states?.[0];
+    const variable = facts.stateVariables.find(v => v.id === model?.variableId);
+    if (!model || !value || !variable || variable.inferred) return undefined;
+    // Only when nothing mentions it: otherwise removing it would leave dead or broken code behind.
+    if (facts.reads.some(r => r.variable === variable.id && r.values.includes(value))) return undefined;
+    if (facts.switches.some(s => s.variable === variable.id && s.cases.includes(value))) return undefined;
+    const others = variable.values.filter(v => v !== value);
+    const files = [variable.loc.file, ...sameLanguage(facts.files, variable.loc.file).filter(x => x !== variable.loc.file)];
+    for (const file of files) {
+        const text = read(file);
+        if (!text) continue;
+        const edit = removeFromDeclaration(file, text, value, others);
+        if (edit) {
+            // Any other mention of the value (e.g. `State.RETRYING` elsewhere) would break the build.
+            const quoted = /^\s*["']/.test(edit.search.slice(edit.search.search(new RegExp(`["']?${value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`))));
+            const mention = new RegExp(quoted ? `["']${value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}["']` : `\\b${value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`);
+            const mentioned = sameLanguage(facts.files, file).some(x => mention.test(x === file ? text.replace(edit.search, edit.replace) : (read(x) ?? '')));
+            if (mentioned) return undefined;
+            return { finding: f, edits: [{ file, search: edit.search, replace: edit.replace }], explanation: `Removes '${value}' from the declaration of ${variable.name}: no code sets, tests or handles it.`, by: 'quick fix' };
+        }
+    }
+    return undefined;
+}
+
+/** The declaration listing all the values (union type, enum body, Python Enum class), without `value`. */
+function removeFromDeclaration(file: string, text: string, value: string, others: string[]): { search: string; replace: string } | undefined {
+    const esc = (x: string) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    if (file.endsWith('.py')) {
+        const line = new RegExp(`^([ \\t]+)${esc(value)}\\s*=\\s*[^\\n]*\\n`, 'm').exec(text);
+        if (!line) return undefined;
+        const around = text.slice(Math.max(0, line.index - 400), line.index + 400);
+        if (!others.every(o => new RegExp(`^\\s+${esc(o)}\\s*=`, 'm').test(around))) return undefined;
+        const search = text.slice(line.index, line.index + line[0].length);
+        return text.split(search).length === 2 ? { search, replace: '' } : undefined;
+    }
+    // One value per line or per `case`: Go `const ( ... Retrying )`, PHP `case Retrying;`, Scala `case object Retrying extends State`.
+    const perLine = new RegExp(`(^|\\n)[ \\t]*(case\\s+(object\\s+)?)?${esc(value)}(\\s+extends\\s+\\w+(\\(\\))?)?[ \\t]*[,;]?[ \\t]*(?=\\n)`);
+    const inlineCase = new RegExp(`[ \\t]*\\bcase\\s+${esc(value)}\\s*;`);
+    for (const re of [inlineCase, perLine]) {
+        const m = re.exec(text);
+        if (!m) continue;
+        const around = text.slice(Math.max(0, m.index - 600), m.index + m[0].length + 600);
+        if (!others.every(o => new RegExp(`\\b${esc(o)}\\b`).test(around))) continue;
+        if (text.split(m[0]).length !== 2) continue;
+        return { search: m[0], replace: '' };
+    }
+    // A statement or block containing every value: `'a' | 'b' | 'c'` or `{ A, B, C }`.
+    for (const quote of ["'", '"', '']) {
+        const token = (v: string) => (quote ? `${quote}${esc(v)}${quote}` : `\\b${esc(v)}\\b`);
+        const union = new RegExp(`(\\s*\\|\\s*${token(value)}|${token(value)}\\s*\\|\\s*)`);
+        const list = new RegExp(`(\\s*,\\s*${token(value)}(?!\\s*\\()|${token(value)}(?!\\s*\\()\\s*,\\s*)`);
+        const statements = text.match(new RegExp(`[^;{}]*${token(value)}[^;{}]*`, 'g')) ?? [];
+        for (const statement of statements) {
+            if (!others.every(o => new RegExp(token(o)).test(statement))) continue;
+            const re = quote ? union : list;
+            if (!re.test(statement)) continue;
+            const replaced = statement.replace(re, '');
+            if (text.split(statement).length !== 2) continue;
+            return { search: statement, replace: replaced };
+        }
+    }
+    return undefined;
 }
 
 /** The missing values as explicit cases doing what the code did for them before: nothing. */
@@ -254,6 +398,15 @@ function releaseResource(f: Finding, facts: Facts, models: ExtractedModel[], tex
 }
 
 // ---------------------------------------------------------------- helpers
+
+const LANGUAGE_GROUPS = [['ts', 'tsx', 'mts', 'cts', 'js', 'mjs'], ['c', 'h'], ['cpp', 'cc', 'cxx', 'hpp', 'hh', 'hxx', 'h'], ['kt', 'kts'], ['groovy', 'gradle'], ['scala', 'sc'], ['R', 'r']];
+
+/** Files of the same language as `file` (only they can refer to its declarations). */
+function sameLanguage(files: string[], file: string): string[] {
+    const ext = file.replace(/^.*\./, '');
+    const group = LANGUAGE_GROUPS.find(g => g.includes(ext)) ?? [ext];
+    return files.filter(x => group.includes(x.replace(/^.*\./, '')));
+}
 
 /** A label/value written like `template` (which spells `known`), for another value: 'x' -> 'y', State.X -> State.Y, State::X -> State::Y. */
 function spell(template: string, known: string, value: string): string {

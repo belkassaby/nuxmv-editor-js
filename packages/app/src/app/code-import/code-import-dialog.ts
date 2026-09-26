@@ -4,7 +4,7 @@ import { downloadText } from '../file-io';
 import { HelpService } from '../help-dialog/help.service';
 import { CodeImport, type CodeFinding, type CodeModel } from './code-import';
 
-type View = 'findings' | 'changes' | 'change' | 'models' | 'patterns' | 'paradigm';
+type View = 'findings' | 'changes' | 'change' | 'models' | 'model' | 'modelChange' | 'patterns' | 'paradigm';
 type Severity = CodeFinding['severity'];
 
 const CATEGORY_LABELS: Record<CodeFinding['category'], string> = {
@@ -57,9 +57,68 @@ export class CodeImportDialog {
     readonly applyMessage = signal<{ ok: boolean; text: string } | null>(null);
     private readonly diff = viewChild(CodeDiff);
     private back: View = 'findings';
+    private reviewBack: View = 'findings';
+
+    /** The model whose properties are shown, and the model change being looked at. */
+    readonly modelShown = signal<CodeModel | null>(null);
+    readonly modelChange = signal<{ finding: CodeFinding; change: NonNullable<NonNullable<CodeFinding['suggestedPatch']>['models']>[number] } | null>(null);
+
+    /** Each property of a model with its verdict and the finding it produced (when false). */
+    readonly modelProperties = computed(() => {
+        const m = this.modelShown();
+        const r = this.report();
+        if (!m || !r) return [];
+        return r.verdicts
+            .filter(v => v.model === m.id)
+            .map(v => ({ ...v, finding: r.findings.find(f => f.model === m.id && f.spec?.startsWith(`${v.spec} :=`)) }));
+    });
+
+    /** Findings on a model that are not a property (graph checks: stuck states, unhandled cases). */
+    readonly modelOtherFindings = computed(() => {
+        const m = this.modelShown();
+        return (this.report()?.findings ?? []).filter(f => f.model === m?.id && !f.spec);
+    });
+
+    showModel(m: CodeModel): void {
+        if (this.view() !== 'model' && this.view() !== 'modelChange') this.back = this.view();
+        this.modelShown.set(m);
+        this.view.set('model');
+    }
+
+    showModelOf(f: CodeFinding): void {
+        const m = this.modelOf(f.model);
+        if (m) this.showModel(m);
+    }
+
+    /** The model re-extracted from the changed code, next to the current one. */
+    showModelChange(f: CodeFinding): void {
+        const m = this.modelShown() ?? this.modelOf(f.model);
+        const change = f.suggestedPatch?.models?.find(c => c.id === m?.id) ?? f.suggestedPatch?.models?.[0];
+        if (!change) return;
+        if (m) this.modelShown.set(m);
+        this.modelChange.set({ finding: f, change });
+        this.view.set('modelChange');
+    }
+
+    /** Opens the changed model in a tab, as it would be extracted after applying the change. */
+    openChangedModel(): void {
+        const c = this.modelChange()?.change;
+        if (c?.after) {
+            this.openModel.emit({ text: c.after, name: `${c.id}-after-change.pflow`, check: true });
+            this.close();
+        }
+    }
+
+    backToModel(): void {
+        this.view.set('model');
+    }
+
+    backFromModel(): void {
+        this.view.set(this.back === 'model' || this.back === 'modelChange' ? 'models' : this.back);
+    }
 
     review(f: CodeFinding): void {
-        this.back = this.view() === 'change' ? this.back : this.view();
+        this.reviewBack = this.view() === 'change' ? this.reviewBack : this.view();
         this.reviewing.set(f);
         this.fileIndex.set(0);
         this.applyMessage.set(null);
@@ -67,7 +126,7 @@ export class CodeImportDialog {
     }
 
     closeReview(): void {
-        this.view.set(this.back);
+        this.view.set(this.reviewBack);
         this.reviewing.set(null);
     }
 

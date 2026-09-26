@@ -52,6 +52,50 @@ describe('quick fixes, verified by re-running every check', () => {
         expect(f.suggestedPatch!.files![0].after).toMatch(expected);
     });
 
+    it.each([
+        ['c/job.c', 'RETRYING'],
+        ['cpp/job.cpp', 'Retrying'],
+        ['csharp/Job.cs', 'Retrying'],
+        ['go/job.go', 'Retrying'],
+        ['groovy/Job.groovy', 'RETRYING'],
+        ['java/src/main/java/app/Job.java', 'RETRYING'],
+        ['kotlin/Job.kt', 'RETRYING'],
+        ['php/Job.php', 'Retrying'],
+        ['rust/src/lib.rs', 'Retrying'],
+        ['scala/Job.scala', 'Retrying'],
+        ['swift/Job.swift', 'retrying']
+    ])('removes a value nothing uses from its declaration in %s, and the model loses the false property', async (file, value) => {
+        const r = await run(POLYGLOT);
+        const f = r.findings.find(x => x.rule === 'unreachable-state' && x.loc?.file === file)!;
+        expect(f.suggestedPatch?.verified, file).toBe(true);
+        const change = f.suggestedPatch!.files![0];
+        expect(change.file).toBe(file);
+        expect(change.before).toMatch(new RegExp(`\\b${value}\\b`));
+        expect(change.after).not.toMatch(new RegExp(`\\b${value}\\b`));
+        const model = f.suggestedPatch!.models!.find(m => m.id === f.model)!;
+        expect(model.falseBefore).toContain(`reach_${value}`);
+        expect(model.falseAfter).toEqual([]);
+        expect(model.before).toContain(`state ${value}`);
+        expect(model.after).not.toContain(`state ${value}`);
+    });
+
+    it('leaves a value alone when code still tests it (dead branch to remove by hand)', async () => {
+        const order = (await run(SHOP)).findings.find(x => x.rule === 'unreachable-state' && x.subject === 'Order.status')!;
+        expect(order.suggestedPatch).toBeUndefined();
+        const ruby = (await run(POLYGLOT)).findings.find(x => x.rule === 'unreachable-state' && x.loc?.file === 'ruby/job.rb')!;
+        expect(ruby.suggestedPatch).toBeUndefined();
+    });
+
+    it('declares a state the machine cannot leave as final in provenflow.config.json', async () => {
+        const f = (await run(SHOP)).findings.find(x => x.rule === 'cannot-settle' && x.subject.includes('Lamp'))!;
+        expect(f.suggestedPatch?.verified).toBe(true);
+        const config = f.suggestedPatch!.files![0];
+        expect(config.file).toBe('provenflow.config.json');
+        expect(config.before).toBe('');
+        expect(JSON.parse(config.after).machines.Lamp.terminal).toEqual(expect.arrayContaining(['off', 'broken']));
+        expect(f.suggestedPatch!.models![0].falseAfter).toEqual([]);
+    });
+
     it('proposes nothing unless asked', async () => {
         const r = await extractProject(SHOP, { config: {} });
         expect(r.findings.some(f => f.suggestedPatch)).toBe(false);

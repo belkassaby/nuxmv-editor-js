@@ -19,6 +19,7 @@ export interface CodeFinding {
     counterexample?: Array<{ state: string; event?: string; loc?: CodeLocation }>;
     source: 'analysis' | 'nuxmv' | 'graph' | 'llm';
     suggestedPatch?: SuggestedChange;
+    states?: string[];
 }
 
 /** A proposed code change: every changed file whole, before and after. */
@@ -28,6 +29,8 @@ export interface SuggestedChange {
     verified: boolean;
     note: string;
     by?: string;
+    /** Models re-extracted from the changed code: before/after .pflow and their false properties. */
+    models?: Array<{ id: string; subject: string; before: string; after: string; falseBefore: string[]; falseAfter: string[] }>;
 }
 
 export interface LlmProviders {

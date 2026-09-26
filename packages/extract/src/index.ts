@@ -8,7 +8,7 @@
  *     -> optional LLM: computed writes, properties, fixes (each verified)
  */
 import { join } from 'node:path';
-import { loadConfig, type ProvenflowConfig } from './config.js';
+import { CONFIG_FILE, loadConfig, type ProvenflowConfig } from './config.js';
 import { mergeFacts, type Facts } from './ir.js';
 import { analyseArchitecture, type ArchitectureResult } from './architecture.js';
 import { buildLifecycles } from './lifecycles.js';
@@ -121,18 +121,22 @@ export async function extractProject(root: string, options: ExtractOptions = {})
     ]);
     findings = applyIgnores(findings, config).sort(bySeverity);
 
-    const rerun = async (overrides: Map<string, string>) =>
-        (await extractProject(root, { config, checker: options.checker, overrides: new Map([...(options.overrides ?? []), ...overrides]) })).findings;
+    const rerun = async (overrides: Map<string, string>) => {
+        // A change of provenflow.config.json is part of the change being checked.
+        const changedConfig = overrides.get(CONFIG_FILE);
+        const r = await extractProject(root, { config: changedConfig ? (JSON.parse(changedConfig) as ProvenflowConfig) : config, checker: options.checker, overrides: new Map([...(options.overrides ?? []), ...overrides]) });
+        return { findings: r.findings, models: r.models, verdicts: r.verdicts };
+    };
     const read = (file: string) => options.overrides?.get(file) ?? readSafe(join(root, file));
     if ((options.quickFixes ?? 0) > 0) {
-        const proposals = quickFixes(findings, facts, models, read).slice(0, options.quickFixes);
-        const fixed = await verifyProposals(findings, proposals, root, rerun, read);
+        const proposals = quickFixes(findings, facts, models, read, config).slice(0, options.quickFixes);
+        const fixed = await verifyProposals(findings, proposals, root, rerun, read, { models, verdicts: verification.verdicts });
         fixLog.accepted.push(...fixed.accepted);
         fixLog.rejected.push(...fixed.rejected);
         findings = fixed.findings;
     }
     if (llm && (options.llmFixes ?? 0) > 0) {
-        const fixed = await suggestFixes(findings, root, llm, rerun, options.llmFixes);
+        const fixed = await suggestFixes(findings, root, llm, rerun, options.llmFixes, { models, verdicts: verification.verdicts });
         record(fixed.log);
         findings = fixed.findings;
     }

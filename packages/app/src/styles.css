@@ -304,3 +304,6 @@ dialog.code-import header h2 { flex: 1; }
 .code-diff .tok-operator, .code-diff .tok-punctuation { color: var(--tok-operator); }
 .code-diff .tok-meta, .code-diff .tok-annotation, .code-diff .tok-processingInstruction { color: var(--tok-meta); }
 .code-diff .tok-invalid { color: var(--error); }
+.code-model-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; align-items: center; }
+.pad-report { padding: 6px 16px 0; margin: 0; }
+.nowrap { white-space: nowrap; }

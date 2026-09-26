@@ -55,8 +55,12 @@ export function buildStateMachines(facts: Facts, config: ProvenflowConfig): Mach
             for (const s of declared.states ?? []) b.state(s, s === declared.initial);
             for (const t of declared.transitions ?? []) b.transition(t.source, t.target, { event: t.event ?? 'transition', loc: t.line ? { file: declared.loc.file, line: t.line } : declared.loc });
         }
+        const declaredTerminal = config.machines?.[declared.name]?.terminal ?? b.states.filter(s => looksTerminal(s));
         addStandardSpecs(b, b.states, b.states.filter(s => looksTerminal(s)), config.machines?.[declared.name]?.terminal, declared.name, config.machines?.[declared.name]?.specs ?? [], declared.loc, false);
-        models.push(b.build());
+        const built = b.build();
+        built.terminal = declaredTerminal;
+        built.configKey = declared.name;
+        models.push(built);
     }
     return { models, findings, dynamicWrites };
 }
@@ -149,9 +153,13 @@ function machineOf(variable: StateVariableFact, writes: StateWriteFact[], facts:
             fix: `Add the transition out of '${value}' (a reset, retry or cancel), or list it in provenflow.config.json under machines["${variable.name}"].terminal if it is final.`,
             loc: variable.loc,
             model: id,
-            source: 'graph'
+            source: 'graph',
+            states: [value]
         });
     }
+    model.terminal = terminal;
+    model.configKey = variable.name;
+    model.variableId = variable.id;
     return { model, findings };
 }
 

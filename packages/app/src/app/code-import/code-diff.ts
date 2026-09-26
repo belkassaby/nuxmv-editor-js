@@ -5,6 +5,7 @@ import { MergeView } from '@codemirror/merge';
 import { EditorState } from '@codemirror/state';
 import { EditorView, lineNumbers } from '@codemirror/view';
 import { classHighlighter } from '@lezer/highlight';
+import { pflowHighlight, pflowLanguage } from '../text-editor/pflow-language';
 
 /** Loaded languages, by name: each grammar is fetched once, the first time a file needs it. */
 const loaded = new Map<string, Promise<LanguageSupport>>();
@@ -30,7 +31,7 @@ export function languageFor(file: string): Promise<LanguageSupport | undefined> 
 @Component({
     selector: 'app-code-diff',
     template: `
-        <div class="code-diff-heads"><span>Original</span><span>Proposed (editable)</span></div>
+        <div class="code-diff-heads"><span>{{ leftTitle() }}</span><span>{{ rightTitle() }}</span></div>
         <div #host class="code-diff"></div>
     `
 })
@@ -39,6 +40,10 @@ export class CodeDiff implements OnDestroy {
     readonly after = input.required<string>();
     /** File name: chooses the syntax highlighting. */
     readonly file = input('');
+    readonly leftTitle = input('Original');
+    readonly rightTitle = input('Proposed (editable)');
+    /** Whether the right side can be edited. */
+    readonly editable = input(true);
     private readonly host = viewChild.required<ElementRef<HTMLElement>>('host');
     private view?: MergeView;
 
@@ -64,14 +69,15 @@ export class CodeDiff implements OnDestroy {
 
     private async create(before = this.before(), after = this.after(), file = this.file()): Promise<void> {
         const generation = ++this.generation;
-        const language = await languageFor(file);
+        const pflow = file.endsWith('.pflow');
+        const language = pflow ? undefined : await languageFor(file);
         if (generation !== this.generation) return; // a newer file was asked for meanwhile
         this.view?.destroy();
         // Token classes (tok-keyword, tok-string...) coloured in styles.css, for light and dark themes.
-        const common = [lineNumbers(), EditorView.lineWrapping, syntaxHighlighting(classHighlighter), ...(language ? [language] : [])];
+        const common = [lineNumbers(), EditorView.lineWrapping, ...(pflow ? [pflowLanguage, pflowHighlight] : [syntaxHighlighting(classHighlighter), ...(language ? [language] : [])])];
         this.view = new MergeView({
             a: { doc: before, extensions: [...common, EditorState.readOnly.of(true), EditorView.editable.of(false)] },
-            b: { doc: after, extensions: common },
+            b: { doc: after, extensions: this.editable() ? common : [...common, EditorState.readOnly.of(true), EditorView.editable.of(false)] },
             parent: this.host().nativeElement,
             highlightChanges: true,
             gutter: true,

@@ -353,8 +353,19 @@ tab and checks it, so its counterexample is one click away. Every model can have
 the **Code report** button next to the tabs reopens the findings and the list of models, also after
 a reload.
 
-Findings can come with a **code change**: a quick fix for missing switch cases, a write after an
-`await` without a re-check, or a resource acquired twice or never released; or an LLM's patch. The
+Findings are the problems. Most are a property of an extracted **model** that nuXmv found false;
+**Models → Properties** lists each model's properties with their verdicts and what to do about the
+false ones.
+
+Findings can come with a **code change**. It is either an LLM's patch, or a quick fix for:
+- missing switch cases;
+- a write after an `await` without a re-check;
+- a resource acquired twice or never released;
+- a declared value nothing uses;
+- a state the machine cannot leave, declared final in the config.
+
+**Model after the change** shows the model re-extracted from the changed code next to the current
+one. The
 change is applied in memory and every check is re-run, so "✓ verified" means the finding is gone
 and nothing new appears. **Review change** shows the original and the proposed code side by side,
 with the differences highlighted. You can edit the proposed side, then **Apply** it to the file

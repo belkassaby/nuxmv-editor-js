@@ -68,6 +68,14 @@
       </div>
       <p class="small">{{ f.message }}</p>
       <p class="small"><strong>Change:</strong> {{ f.suggestedPatch!.note }}</p>
+      @if (f.suggestedPatch!.models?.length) {
+        <p class="small">
+          Models re-extracted from the changed code:
+          @for (mc of f.suggestedPatch!.models; track mc.id) {
+            <button type="button" class="link small" (click)="showModelChange(f)">{{ mc.subject }}: {{ mc.falseBefore.length }} → {{ mc.falseAfter.length }} false</button>
+          }
+        </p>
+      }
       @if ((f.suggestedPatch!.files ?? []).length > 1) {
         <nav class="help-tabs" role="tablist">
           @for (pf of f.suggestedPatch!.files; track pf.file; let i = $index) {
@@ -88,6 +96,90 @@
         </div>
       }
     </div>
+  } @else if (view() === 'model' && modelShown(); as m) {
+    <div class="code-review">
+      <div class="code-review-head">
+        <button type="button" (click)="backFromModel()">← Back</button>
+        <strong>{{ m.subject }}</strong>
+        <span class="muted small">{{ m.kind }} · {{ m.states }} states · {{ m.transitions }} transitions</span>
+        @if (m.loc) { <code class="small muted">{{ where(m.loc) }}</code> }
+        <span class="spacer"></span>
+        <button type="button" (click)="show(m)">Open the model in a tab</button>
+      </div>
+      <p class="small muted">
+        This model was extracted from the code; its properties say what the code should satisfy, and nuXmv checked each of them.
+        A false property is a finding: the counterexample is a sequence of calls in the code. Fix the code (a proposed change is shown when there is one)
+        or, when the code is right, the model's assumptions (for instance which states are final, in provenflow.config.json).
+      </p>
+      <table class="code-table">
+        <thead><tr><th>property</th><th>verdict</th><th>what it means and what to do</th></tr></thead>
+        <tbody>
+          @for (p of modelProperties(); track p.spec) {
+            <tr>
+              <td><strong>{{ p.spec }}</strong>@if (p.finding?.spec; as spec) { <br /><code class="small muted">{{ spec.replace(p.spec + ' := ', '') }}</code> }</td>
+              <td><span class="badge" [class.ok]="p.verdict === 'true'" [class.fail]="p.verdict === 'false'" [class.unknown]="p.verdict === 'unknown'">{{ p.verdict }}</span></td>
+              <td class="small">
+                @if (p.finding; as f) {
+                  <div>{{ f.message }}</div>
+                  <div><strong>Fix:</strong> {{ f.fix }}</div>
+                  <div class="code-model-actions">
+                    @if (f.suggestedPatch?.files?.length) {
+                      <button type="button" class="small" (click)="review(f)">Review the code change <span class="badge" [class.ok]="f.suggestedPatch!.verified" [class.warn]="!f.suggestedPatch!.verified">{{ f.suggestedPatch!.verified ? '✓ verified' : '✗ not verified' }}</span></button>
+                    }
+                    @if (f.suggestedPatch?.models?.length) {
+                      <button type="button" class="small" (click)="showModelChange(f)">Model after the change</button>
+                    }
+                    @if (!f.suggestedPatch) { <span class="muted">No change proposed automatically (enable an LLM, or follow the fix).</span> }
+                  </div>
+                } @else if (p.verdict === 'true') {
+                  <span class="muted">Holds.</span>
+                } @else if (p.verdict === 'unknown') {
+                  <span class="muted">Not checked (declared or suggested properties need nuXmv).</span>
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+      @if (modelOtherFindings().length > 0) {
+        <h3>Other findings on this model</h3>
+        <ul class="code-findings">
+          @for (f of modelOtherFindings(); track $index) {
+            <li class="code-finding" [class]="f.severity">
+              <div class="code-finding-head">
+                <span class="badge" [class.fail]="f.severity === 'error'" [class.warn]="f.severity === 'warning'">{{ f.severity }}</span>
+                <strong>{{ f.rule }}</strong>
+                @if (f.loc) { <code class="small">{{ where(f.loc) }}</code> }
+                <span class="spacer"></span>
+                @if (f.suggestedPatch?.files?.length) { <button type="button" class="small" (click)="review(f)">Review the code change</button> }
+                @if (f.suggestedPatch?.models?.length) { <button type="button" class="small" (click)="showModelChange(f)">Model after the change</button> }
+              </div>
+              <p>{{ f.message }}</p>
+              <p class="code-fix"><strong>Fix:</strong> {{ f.fix }}</p>
+            </li>
+          }
+        </ul>
+      }
+    </div>
+  } @else if (view() === 'modelChange' && modelChange(); as mc) {
+    <div class="code-review">
+      <div class="code-review-head">
+        <button type="button" (click)="backToModel()">← Back to the model</button>
+        <strong>{{ mc.change.subject }}</strong>
+        <span class="muted small">after the change for {{ mc.finding.rule }}</span>
+        <span class="badge" [class.ok]="mc.finding.suggestedPatch!.verified" [class.warn]="!mc.finding.suggestedPatch!.verified">{{ mc.finding.suggestedPatch!.verified ? '✓ verified' : '✗ not verified' }}</span>
+      </div>
+      <p class="small">
+        The model extracted from the changed code, next to the current one.
+        False properties: <strong>{{ mc.change.falseBefore.length }}</strong> ({{ mc.change.falseBefore.join(', ') || 'none' }})
+        → <strong>{{ mc.change.falseAfter.length }}</strong> ({{ mc.change.falseAfter.join(', ') || 'none' }}).
+      </p>
+      <app-code-diff [before]="mc.change.before" [after]="mc.change.after" [file]="mc.change.id + '.pflow'" leftTitle="Model now" rightTitle="Model after the code change" [editable]="false" />
+      <div class="code-review-actions">
+        <button type="button" class="primary" (click)="review(mc.finding)">Review the code change</button>
+        @if (mc.change.after) { <button type="button" (click)="openChangedModel()">Open the changed model in a tab</button> }
+      </div>
+    </div>
   } @else {
     @let r = report()!;
     <div class="code-summary">
@@ -99,6 +191,10 @@
       <button type="button" (click)="downloadReport()">Download report (.md)</button>
       <button type="button" (click)="codeImport.clear()">New analysis</button>
     </div>
+    <p class="small muted pad-report">
+      <strong>Findings</strong> are the problems. Most are a property of an extracted <strong>model</strong> that nuXmv found false (open the model to see all its properties);
+      the others come from direct checks (missing cases, layers, style). <strong>Code changes</strong> are the proposed fixes, each checked again before it is marked verified.
+    </p>
     <nav class="help-tabs code-tabs" role="tablist">
       <button type="button" role="tab" [class.active]="view() === 'findings'" (click)="view.set('findings')">Findings</button>
       <button type="button" role="tab" [class.active]="view() === 'changes'" (click)="view.set('changes')">Code changes ({{ changes().length }})</button>
@@ -127,6 +223,9 @@
                     <span class="spacer"></span>
                     @if (f.suggestedPatch?.files?.length) {
                       <button type="button" class="small" (click)="review(f)" [title]="f.suggestedPatch!.note">Review change <span class="badge" [class.ok]="f.suggestedPatch!.verified" [class.warn]="!f.suggestedPatch!.verified">{{ f.suggestedPatch!.verified ? '✓' : '✗' }}</span></button>
+                    }
+                    @if (modelOf(f.model); as m) {
+                      <button type="button" class="small" (click)="showModel(m)" title="The model this was found on, with all its properties">Model</button>
                     }
                     @if (modelOf(f.model); as m) {
                       <button type="button" class="small" (click)="show(m, true)" [title]="f.source === 'nuxmv' ? 'Open the model and check it: the counterexample replays on the diagram' : 'Open the model'">Open model</button>
@@ -190,7 +289,7 @@
                   <td>
                     @if (m.failed.length > 0) { <span class="badge fail">{{ m.failed.length }} false</span> } @else { <span class="badge ok">{{ m.properties }} hold</span> }
                   </td>
-                  <td><button type="button" class="small" (click)="show(m)">Open</button></td>
+                  <td class="nowrap"><button type="button" class="small" (click)="showModel(m)">Properties</button> <button type="button" class="small" (click)="show(m)">Open</button></td>
                 </tr>
               }
             </tbody>

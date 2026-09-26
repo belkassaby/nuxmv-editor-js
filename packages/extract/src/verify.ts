@@ -80,7 +80,8 @@ function toFinding(m: ExtractedModel, name: string, expression: string, origin: 
         model: m.id,
         spec: `${name} := ${expression}`,
         counterexample: steps,
-        source
+        source,
+        states: origin.states
     };
 }
 
