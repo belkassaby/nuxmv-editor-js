@@ -1,9 +1,9 @@
 import { existsSync } from 'node:fs';
-import { mkdir, mkdtemp, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { dirname, isAbsolute, join, normalize } from 'node:path';
+import { dirname, isAbsolute, join, normalize, relative, resolve } from 'node:path';
 import express, { type NextFunction, type Request, type Response } from 'express';
-import { extractProject, webReport, type ProvenflowConfig } from '@provenflow/extract';
+import { extractProject, providerFromSpec, webReport, type ProvenflowConfig } from '@provenflow/extract';
 import { generateSmv, GenerationError, parseDiagram } from '@provenflow/language';
 import { ENGINES, nuxmvInfo, runNuxmv, type Engine, type RunnerConfig } from './nuxmv-runner.js';
 import { nurvAvailable, runNurv } from './nurv-runner.js';
@@ -41,13 +41,16 @@ export function createApp(options: AppOptions): express.Express {
     app.disable('x-powered-by');
     // Code bases are uploaded to /api/extract, which takes larger bodies.
     const json = express.json({ limit: '2mb' });
-    app.use((req, res, next) => (req.path === '/api/extract' ? next() : json(req, res, next)));
+    app.use((req, res, next) => (req.path === '/api/extract' || req.path === '/api/apply' ? next() : json(req, res, next)));
 
     let running = 0;
     const maxRuns = options.maxConcurrentRuns ?? 2;
+    /** Folders analysed by path: the only places /api/apply may write to. */
+    const analysedRoots = new Set<string>();
+    const llmProviders = () => ({ anthropic: !!process.env['ANTHROPIC_API_KEY'], openai: !!process.env['OPENAI_API_KEY'] || !!process.env['OPENAI_BASE_URL'], ollama: true });
 
     app.get('/api/health', async (_req, res) => {
-        res.json({ ok: true, nuxmv: await nuxmvInfo(options.runner), nurv: { available: nurvAvailable(options.nurv) }, extract: { paths: !!options.allowLocalPaths } });
+        res.json({ ok: true, nuxmv: await nuxmvInfo(options.runner), nurv: { available: nurvAvailable(options.nurv) }, extract: { paths: !!options.allowLocalPaths, apply: !!options.allowLocalPaths, llm: llmProviders() } });
     });
 
     /** POST /api/nurv { diagram }: NuRV-generated full-LTL monitors (sources + build commands). */
@@ -71,18 +74,30 @@ export function createApp(options: AppOptions): express.Express {
      *   { path: "/abs/folder" }                   a folder on this machine (allowLocalPaths), or
      *   { files: { "src/a.ts": "...", ... } }     uploaded sources (and provenflow.config.json, package.json)
      *   config?: provenflow.config.json contents (default: the one in the folder)
+     *   quickFixes?: number of verified quick fixes to propose (default 20, 0: none)
+     *   llm?: "anthropic:<model>" | "openai:<model>" | "ollama:<model>", llmFixes?: number (keys come from the server's environment)
      */
     app.post('/api/extract', express.json({ limit: '64mb' }), async (req: Request, res: Response, next: NextFunction) => {
         let temp: string | undefined;
         try {
-            const body = (req.body ?? {}) as { path?: unknown; files?: unknown; config?: unknown };
+            const body = (req.body ?? {}) as { path?: unknown; files?: unknown; config?: unknown; quickFixes?: unknown; llm?: unknown; llmFixes?: unknown };
+            const quickFixes = body.quickFixes === undefined ? 20 : Number(body.quickFixes);
+            const llmFixes = body.llmFixes === undefined ? 5 : Number(body.llmFixes);
+            if (!Number.isFinite(quickFixes) || quickFixes < 0 || !Number.isFinite(llmFixes) || llmFixes < 0) throw new HttpError(400, "'quickFixes' and 'llmFixes' must be numbers >= 0.");
+            if (body.llm !== undefined && (typeof body.llm !== 'string' || !/^(anthropic|openai|ollama):[\w.:/-]*$/.test(body.llm))) throw new HttpError(400, "'llm' must be anthropic:<model>, openai:<model> or ollama:<model>.");
+            let llm;
+            try {
+                llm = typeof body.llm === 'string' ? providerFromSpec(body.llm) : undefined;
+            } catch (error) {
+                throw new HttpError(400, (error as Error).message);
+            }
             let root: string;
             if (typeof body.path === 'string') {
                 if (!options.allowLocalPaths) throw new HttpError(403, 'This server does not read folders by path (it is not bound to localhost): upload the folder instead.');
                 if (!isAbsolute(body.path)) throw new HttpError(400, "'path' must be an absolute folder path.");
                 const info = await stat(body.path).catch(() => undefined);
                 if (!info?.isDirectory()) throw new HttpError(404, `No folder at ${body.path}.`);
-                root = body.path;
+                root = resolve(body.path);
             } else if (body.files && typeof body.files === 'object' && !Array.isArray(body.files)) {
                 const entries = Object.entries(body.files as Record<string, unknown>);
                 if (entries.length === 0) throw new HttpError(400, 'No files uploaded.');
@@ -105,9 +120,13 @@ export function createApp(options: AppOptions): express.Express {
                 const available = (await nuxmvInfo(options.runner)).available;
                 const result = await extractProject(root, {
                     config: body.config as ProvenflowConfig | undefined,
-                    checker: available ? smv => runNuxmv(smv, { engine: 'bdd' }, options.runner) : undefined
+                    checker: available ? smv => runNuxmv(smv, { engine: 'bdd' }, options.runner) : undefined,
+                    quickFixes: Math.min(100, quickFixes),
+                    llm,
+                    llmFixes: llm ? Math.min(20, llmFixes) : 0
                 });
-                res.json({ ...(webReport(result) as object), root: temp ? '(uploaded folder)' : root });
+                if (!temp) analysedRoots.add(root);
+                res.json({ ...(webReport(result) as object), root: temp ? '(uploaded folder)' : root, applicable: !temp && !!options.allowLocalPaths });
             } finally {
                 running--;
             }
@@ -115,6 +134,30 @@ export function createApp(options: AppOptions): express.Express {
             next(error);
         } finally {
             if (temp) await rm(temp, { recursive: true, force: true });
+        }
+    });
+
+    /**
+     * POST /api/apply { root, file, before, after }: writes a reviewed change to a file of a folder this
+     * server analysed by path. Refused when the file changed since the analysis (409).
+     */
+    app.post('/api/apply', express.json({ limit: '16mb' }), async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            if (!options.allowLocalPaths) throw new HttpError(403, 'This server does not write files (it is not bound to localhost): download the changed file instead.');
+            const body = (req.body ?? {}) as { root?: unknown; file?: unknown; before?: unknown; after?: unknown };
+            if (typeof body.root !== 'string' || typeof body.file !== 'string' || typeof body.before !== 'string' || typeof body.after !== 'string') throw new HttpError(400, "Provide 'root', 'file', 'before' and 'after'.");
+            const root = resolve(body.root);
+            if (!analysedRoots.has(root)) throw new HttpError(403, `${root} was not analysed by this server: import it by path first.`);
+            const target = resolve(root, body.file);
+            const inside = relative(root, target);
+            if (!inside || inside.startsWith('..') || isAbsolute(inside)) throw new HttpError(400, `Invalid file ${body.file}.`);
+            const current = await readFile(target, 'utf8').catch(() => undefined);
+            if (current === undefined) throw new HttpError(404, `No file ${body.file} in ${root}.`);
+            if (current !== body.before) throw new HttpError(409, `${body.file} changed since the analysis: run the analysis again before applying.`);
+            await writeFile(target, body.after, 'utf8');
+            res.json({ ok: true, file: body.file });
+        } catch (error) {
+            next(error);
         }
     });
 

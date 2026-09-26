@@ -22,6 +22,9 @@ import { join } from 'node:path';
 import { parseDiagram, serializeDiagram } from '@provenflow/language';
 import { formatLocation, type Facts, type StateWriteFact } from './ir.js';
 import type { ExtractedModel, Finding } from './models.js';
+import { verifyProposals, type Edit, type Proposal, type Rerun } from './fixes.js';
+
+export type { Edit, Rerun } from './fixes.js';
 
 export interface LlmProvider {
     /** e.g. `anthropic:claude-sonnet-5`. */
@@ -201,23 +204,10 @@ export async function suggestProperties(models: ExtractedModel[], root: string, 
 
 // ----------------------------------------------------------------------- fixes
 
-export interface Edit {
-    file: string;
-    search: string;
-    replace: string;
-}
-
-/** Re-runs the analysis with some files replaced and returns the findings. */
-export type Rerun = (overrides: Map<string, string>) => Promise<Finding[]>;
-
-/** The findings, with a patch proposed by the LLM on the first `limit` warnings/errors, verified by re-running the checks. */
-export async function suggestFixes(findings: Finding[], root: string, provider: LlmProvider, rerun: Rerun, limit = 5): Promise<{ findings: Finding[]; log: LlmLog }> {
-    const log: LlmLog = { accepted: [], rejected: [] };
-    const patched = new Map<Finding, Finding>();
-    const key = (f: Finding) => `${f.rule}|${f.subject}`;
-    const before = new Set(findings.map(key));
-    const candidates = findings.filter(f => f.loc && f.severity !== 'info' && !f.suggestedPatch).slice(0, limit);
-    for (const f of candidates) {
+/** Proposals from the LLM for the first `limit` warnings/errors without a patch yet (verified by the caller). */
+export async function proposeFixes(findings: Finding[], root: string, provider: LlmProvider, limit = 5): Promise<Proposal[]> {
+    const proposals: Proposal[] = [];
+    for (const f of findings.filter(x => x.loc && x.severity !== 'info' && !x.suggestedPatch).slice(0, limit)) {
         const locs = [f.loc!, ...(f.related ?? [])].filter((l, i, all) => all.findIndex(x => x.file === l.file && Math.abs(x.line - l.line) < 20) === i).slice(0, 3);
         const user = [
             `Finding (${f.rule}): ${f.message}`,
@@ -227,45 +217,16 @@ export async function suggestFixes(findings: Finding[], root: string, provider: 
             'Answer: {"edits": [{"file": "...", "search": "...", "replace": "..."}], "explanation": "..."}'
         ].join('\n\n');
         const answer = jsonIn(await provider.complete(SYSTEM, user)) as { edits?: Edit[]; explanation?: string } | undefined;
-        const edits = answer?.edits ?? [];
-        if (edits.length === 0) continue;
-        const overrides = new Map<string, string>();
-        let note = '';
-        for (const e of edits) {
-            const current = overrides.get(e.file) ?? readSafe(join(root, e.file));
-            if (current === undefined || current.split(e.search).length !== 2) {
-                note = `edit for ${e.file} does not match the file exactly once`;
-                break;
-            }
-            overrides.set(e.file, current.replace(e.search, () => e.replace));
-        }
-        const diff = [...overrides].map(([file, text]) => unifiedDiff(file, readSafe(join(root, file)) ?? '', text)).join('\n');
-        if (note) {
-            patched.set(f, { ...f, suggestedPatch: { diff, verified: false, note } });
-            log.rejected.push(`${f.rule} ${f.subject}: ${note}`);
-            continue;
-        }
-        const after = await rerun(overrides);
-        const stillThere = after.some(x => key(x) === key(f));
-        const added = after.filter(x => !before.has(key(x)) && x.severity !== 'info');
-        const verified = !stillThere && added.length === 0;
-        const suggestedPatch = {
-            diff,
-            verified,
-            note: verified ? `Re-running the checks on the patched code: the finding is gone and nothing new appears. ${answer?.explanation ?? ''}`.trim() : stillThere ? 'The finding is still reported on the patched code.' : `The patch introduces: ${added.map(x => x.rule).join(', ')}.`
-        };
-        patched.set(f, { ...f, suggestedPatch });
-        (verified ? log.accepted : log.rejected).push(`fix for ${f.rule} ${f.subject}: ${suggestedPatch.note}`);
+        const edits = (answer?.edits ?? []).filter(e => typeof e?.file === 'string' && typeof e.search === 'string' && typeof e.replace === 'string');
+        if (edits.length > 0) proposals.push({ finding: f, edits, explanation: answer?.explanation ?? '', by: provider.name });
     }
-    return { findings: findings.map(f => patched.get(f) ?? f), log };
+    return proposals;
 }
 
-function readSafe(path: string): string | undefined {
-    try {
-        return readFileSync(path, 'utf8');
-    } catch {
-        return undefined;
-    }
+/** The findings, with a patch proposed by the LLM on the first `limit` warnings/errors, verified by re-running the checks. */
+export async function suggestFixes(findings: Finding[], root: string, provider: LlmProvider, rerun: Rerun, limit = 5): Promise<{ findings: Finding[]; log: LlmLog }> {
+    const verified = await verifyProposals(findings, await proposeFixes(findings, root, provider, limit), root, rerun);
+    return { findings: verified.findings, log: { accepted: verified.accepted, rejected: verified.rejected } };
 }
 
 /** Unified diff of two texts (uses diff(1) when available). */

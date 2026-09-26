@@ -5,7 +5,7 @@
  * each counterexample, to confirm the bug on the real code.
  */
 import { mkdirSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import type { ExtractionResult } from './index.js';
 import { formatLocation } from './ir.js';
 import { modelToPflow, slug, type Finding } from './models.js';
@@ -14,6 +14,8 @@ export interface WrittenFiles {
     dir: string;
     models: string[];
     scenarios: string[];
+    /** One folder per proposed change: the changed files and change.patch. */
+    fixes: string[];
     report: string;
 }
 
@@ -34,10 +36,20 @@ export function writeOutputs(result: ExtractionResult, dir: string): WrittenFile
         writeFileSync(join(dir, file), python ? pytestScenario(f) : vitestScenario(f));
         scenarios.push(file);
     });
+    const fixes: string[] = [];
+    result.findings.filter(f => f.suggestedPatch?.files?.length).forEach((f, i) => {
+        const folder = join('fixes', `${String(i + 1).padStart(2, '0')}-${slug(f.rule)}${f.suggestedPatch!.verified ? '' : '-not-verified'}`);
+        for (const pf of f.suggestedPatch!.files!) {
+            mkdirSync(dirname(join(dir, folder, pf.file)), { recursive: true });
+            writeFileSync(join(dir, folder, pf.file), pf.after);
+        }
+        writeFileSync(join(dir, folder, 'change.patch'), f.suggestedPatch!.diff);
+        fixes.push(folder);
+    });
     writeFileSync(join(dir, 'report.md'), markdownReport(result, models, scenarios));
     writeFileSync(join(dir, 'report.json'), JSON.stringify(jsonReport(result), null, 2));
     writeFileSync(join(dir, 'report.sarif'), JSON.stringify(sarif(result), null, 2));
-    return { dir, models, scenarios, report: join(dir, 'report.md') };
+    return { dir, models, scenarios, fixes, report: join(dir, 'report.md') };
 }
 
 export function summary(result: ExtractionResult): { error: number; warning: number; info: number } {
@@ -88,7 +100,7 @@ function markdownReport(result: ExtractionResult, models: string[], scenarios: s
                 out.push('');
             }
             if (f.suggestedPatch) {
-                out.push(`**Suggested patch** (${f.suggestedPatch.verified ? '✓ verified' : '✗ not verified'}): ${f.suggestedPatch.note}`, '', '```diff', f.suggestedPatch.diff.trim(), '```', '');
+                out.push(`**Suggested change** (${f.suggestedPatch.by ?? 'LLM'}, ${f.suggestedPatch.verified ? '✓ verified' : '✗ not verified'}): ${f.suggestedPatch.note}`, '', '```diff', f.suggestedPatch.diff.trim(), '```', '');
             }
         }
     }

@@ -1,9 +1,10 @@
 import { Component, computed, ElementRef, inject, output, signal, viewChild } from '@angular/core';
+import { CodeDiff } from './code-diff';
 import { downloadText } from '../file-io';
 import { HelpService } from '../help-dialog/help.service';
 import { CodeImport, type CodeFinding, type CodeModel } from './code-import';
 
-type View = 'findings' | 'models' | 'patterns' | 'paradigm';
+type View = 'findings' | 'changes' | 'change' | 'models' | 'patterns' | 'paradigm';
 type Severity = CodeFinding['severity'];
 
 const CATEGORY_LABELS: Record<CodeFinding['category'], string> = {
@@ -20,6 +21,7 @@ const CATEGORY_LABELS: Record<CodeFinding['category'], string> = {
  */
 @Component({
     selector: 'app-code-import-dialog',
+    imports: [CodeDiff],
     templateUrl: './code-import-dialog.html'
 })
 export class CodeImportDialog {
@@ -46,6 +48,57 @@ export class CodeImportDialog {
     });
 
     readonly properties = computed(() => this.report()?.verdicts.length ?? 0);
+
+    /** Findings with a proposed code change. */
+    readonly changes = computed(() => (this.report()?.findings ?? []).filter(f => f.suggestedPatch?.files?.length));
+    /** The change being reviewed, and which of its files. */
+    readonly reviewing = signal<CodeFinding | null>(null);
+    readonly fileIndex = signal(0);
+    readonly applyMessage = signal<{ ok: boolean; text: string } | null>(null);
+    private readonly diff = viewChild(CodeDiff);
+    private back: View = 'findings';
+
+    review(f: CodeFinding): void {
+        this.back = this.view() === 'change' ? this.back : this.view();
+        this.reviewing.set(f);
+        this.fileIndex.set(0);
+        this.applyMessage.set(null);
+        this.view.set('change');
+    }
+
+    closeReview(): void {
+        this.view.set(this.back);
+        this.reviewing.set(null);
+    }
+
+    /** Applies the right-hand text (with any edits) to the file in the analysed folder. */
+    async applyChange(): Promise<void> {
+        const f = this.reviewing();
+        const file = f?.suggestedPatch?.files?.[this.fileIndex()];
+        if (!file) return;
+        const error = await this.codeImport.apply(file.file, file.before, this.diff()?.current() ?? file.after);
+        this.applyMessage.set(error ? { ok: false, text: error } : { ok: true, text: `Applied to ${file.file}. Run the analysis again to check the whole project with the change.` });
+    }
+
+    downloadChange(): void {
+        const file = this.reviewing()?.suggestedPatch?.files?.[this.fileIndex()];
+        if (file) downloadText(file.file.split('/').pop()!, this.diff()?.current() ?? file.after);
+    }
+
+    async copyChange(): Promise<void> {
+        const file = this.reviewing()?.suggestedPatch?.files?.[this.fileIndex()];
+        if (!file) return;
+        await navigator.clipboard.writeText(this.diff()?.current() ?? file.after);
+        this.applyMessage.set({ ok: true, text: 'Copied to the clipboard.' });
+    }
+
+    /** Analyses the same folder again (after applying changes). */
+    async rerun(): Promise<void> {
+        const r = this.report();
+        if (!r?.applicable) return;
+        this.path.set(r.root);
+        await this.analysePath();
+    }
 
     /** `fresh`: start a new analysis; otherwise show the last report (kept across reloads). */
     open(fresh = false): void {

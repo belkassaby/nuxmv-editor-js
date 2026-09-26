@@ -351,11 +351,21 @@ server runs on your machine: the folder is then read in place, with its `node_mo
 models, patterns and paradigm profiles show in the dialog. **Open model** opens a model in a new
 tab and checks it, so its counterexample is one click away. Every model can have its own tab, and
 the **Code report** button next to the tabs reopens the findings and the list of models, also after
-a reload. From a terminal:
+a reload.
+
+Findings can come with a **code change**: a quick fix for missing switch cases, a write after an
+`await` without a re-check, or a resource acquired twice or never released; or an LLM's patch. The
+change is applied in memory and every check is re-run, so "✓ verified" means the finding is gone
+and nothing new appears. **Review change** shows the original and the proposed code side by side,
+with the differences highlighted. You can edit the proposed side, then **Apply** it to the file
+(for folders analysed by path) or download it.
+
+From a terminal:
 
 ```sh
 NUXMV_PATH=/path/to/nuXmv npx pflow extract path/to/project          # report in path/to/project/.provenflow/extract/
 npx pflow extract . --fail-on warning                                # CI gate (exit 5), report.sarif for code scanning
+npx pflow extract . --fix                                            # + verified quick fixes (report.md, fixes/*/change.patch)
 npx pflow extract . --llm anthropic:claude-sonnet-5 --llm-fixes 5    # or openai:<model>, ollama:<model>
 ```
 
@@ -629,7 +639,7 @@ NUXMV_PATH=/path/to/nuXmv npx pflow check examples/mutex.pflow --engine bdd
 | `pflow prob <d.pflow> --reach EXPR [--within K] [--steps EXPR] [--visits EXPR --until EXPR]` | probabilistic analysis |
 | `pflow prism <d.pflow> [-o m.pm]` | PRISM / Storm model and properties |
 | `pflow nurv <d.pflow> [-o dir]` | NuRV full-LTL monitors (`NURV_PATH`) |
-| `pflow extract <dir> [-o out] [--config f] [--fail-on error\|warning\|none] [--llm p:model] [--llm-fixes N]` | verified models of a code base, findings with fixes (exit 5 on findings) |
+| `pflow extract <dir> [-o out] [--config f] [--fail-on error\|warning\|none] [--fix] [--llm p:model] [--llm-fixes N]` | verified models of a code base, findings with fixes and verified code changes (exit 5 on findings) |
 
 ## REST API
 
@@ -642,7 +652,8 @@ NUXMV_PATH=/path/to/nuXmv npx pflow check examples/mutex.pflow --engine bdd
 | POST   | `/api/live/<channel>/command` | `{ event }` sent to the running machine (two-way link) |
 | GET    | `/api/live/<channel>/commands` | Server-Sent Events stream of commands, read by `link_editor(..., commands=True)` |
 | POST   | `/api/nurv` | `{ diagram }`: NuRV monitor sources and build commands (needs `NURV_PATH`) |
-| POST   | `/api/extract` | `{ path }` (a folder of the server machine, when the server is bound to localhost; `PROVENFLOW_EXTRACT_PATHS=0` disables it) or `{ files: { "src/a.ts": "…" } }` (uploaded sources), plus optional `config`: findings, models with their `.pflow` text, patterns, paradigm and the Markdown report |
+| POST   | `/api/apply` | `{ root, file, before, after }`: writes a reviewed change into a folder this server analysed by path (409 if the file changed since) |
+| POST   | `/api/extract` | `{ path }` (a folder of the server machine, when the server is bound to localhost; `PROVENFLOW_EXTRACT_PATHS=0` disables it) or `{ files: { "src/a.ts": "…" } }` (uploaded sources), plus optional `config`, `quickFixes` (default 20), `llm` and `llmFixes`: findings (with verified code changes), models with their `.pflow` text, patterns, paradigm and the Markdown report |
 
 The response contains the raw `stdout`/`stderr` and the parsed `results` (property, verdict, trace),
 `errors` and `warnings`.

@@ -32,10 +32,11 @@ const USAGE = `Usage:
   pflow conform <diagram.pflow> <run.jsonl|otel.json>
                                                  check a recorded run against the model (exit 4 if it deviates)
   pflow extract <project-dir> [-o dir] [--config file] [--fail-on error|warning|none]
-                [--llm anthropic:<model>|openai:<model>|ollama:<model>] [--llm-fixes N]
+                [--fix] [--llm anthropic:<model>|openai:<model>|ollama:<model>] [--llm-fixes N]
                                                  extract verified models of a code base (state machines,
                                                  resource lifecycles, design patterns, architecture) and
-                                                 report bugs with fixes (exit 5 on findings at --fail-on).
+                                                 report bugs with fixes (exit 5 on findings at --fail-on);
+                                                 --fix proposes verified code changes (report.md, fixes/).
                                                  TypeScript, Python, Java, Kotlin, Groovy, Scala, C, C++,
                                                  C#, Go, Rust, Swift, Ruby, PHP, R`;
 
@@ -57,6 +58,7 @@ async function main(): Promise<number> {
             'fail-on': { type: 'string', default: 'error' },
             llm: { type: 'string' },
             'llm-fixes': { type: 'string', default: '0' },
+            fix: { type: 'boolean', default: false },
             quiet: { type: 'boolean', short: 'q', default: false }
         }
     });
@@ -78,7 +80,8 @@ async function main(): Promise<number> {
             configFile: values.config,
             checker,
             llm: values.llm ? providerFromSpec(values.llm) : undefined,
-            llmFixes: Number(values['llm-fixes'])
+            llmFixes: Number(values['llm-fixes']),
+            quickFixes: values.fix ? 50 : 0
         });
         const out = values.output ?? join(file, '.provenflow', 'extract');
         const written = writeOutputs(result, out);

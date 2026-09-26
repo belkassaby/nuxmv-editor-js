@@ -32,6 +32,7 @@ code review is in [the state of the art, section 2.8](state-of-the-art.md#28-che
 - [How it works](#how-it-works)
 - [What the results mean (soundness)](#what-the-results-mean-soundness)
 - [provenflow.config.json](#provenflowconfigjson)
+- [Code changes: quick fixes, review, apply](#code-changes-quick-fixes-review-apply)
 - [LLM assistance, verified](#llm-assistance-verified)
 - [Outputs and CI](#outputs-and-ci)
 - [ProvenFlow checked by ProvenFlow](#provenflow-checked-by-provenflow)
@@ -361,6 +362,38 @@ cycles and paradigm profiles.
   `adapter`, `decorator`, `state`, `command` and `facade`.
 - `ignore` entries match on `rule`, and optionally on `subject` and on a `file` glob. Give a
   `reason`: the file then documents the design decisions.
+
+## Code changes: quick fixes, review, apply
+
+A finding can come with a proposed change: whole files, before and after. Changes come from two
+sources:
+- **Quick fixes:** deterministic, from `--fix`, or "Propose quick fixes" in the editor (on by
+  default there).
+- **The LLM:** `--llm ... --llm-fixes N`, or "Also ask an LLM" in the editor; the keys stay on the
+  server.
+
+Every change is applied in memory, and the whole analysis runs again on the changed files. It is
+marked **✓ verified** only if the finding is gone and no new warning or error appears. Nothing is
+written to your files until you apply a change.
+
+| finding | quick fix | behaviour |
+| --- | --- | --- |
+| `unhandled-state`, `non-exhaustive-dispatch` | the missing values become explicit cases that do nothing (`case 'x': break; // pflow: ...`, Go `case A, B:`, Python `case A \| B: pass`), spelled like the existing labels (`State.X`, `State::X`, `'x'`) | unchanged: those values did nothing before either; the choice is now visible |
+| `stale-write-after-await` | `if (<state> !== <value checked before>) return;` just before the write (TypeScript/JavaScript, Python) | returns early when another method changed the state during the await |
+| `resource-leak` | release the previous resource before acquiring again (`clearInterval`, `close()`, `disconnect()`, `unsubscribe()`), and add `dispose()` (`ngOnDestroy` for Angular components) releasing it (TypeScript/JavaScript) | the resource can no longer be lost |
+
+In the editor, **Review change** opens a side-by-side view:
+- original on the left, proposed on the right, with the changed lines and characters highlighted,
+  and unchanged regions folded;
+- the right side is editable;
+- **Apply** writes it to the file. This works for folders analysed by path on a local server, and
+  only if the file still matches what was analysed; otherwise the server answers 409.
+- **Download file** and **Copy** give you the text;
+- **Run the analysis again** checks the whole project with the change.
+
+The **Code changes** tab lists every proposal with its verification. From the terminal, `--fix`
+writes each change to `fixes/NN-rule/` (the changed files and `change.patch`), and report.md shows
+the diff.
 
 ## LLM assistance, verified
 

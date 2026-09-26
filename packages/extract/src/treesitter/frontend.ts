@@ -529,14 +529,23 @@ class TreeSitterExtractor {
 
     /** Label texts of a case (`case A, B:`, `A | B =>`, `when :a, :b`, `State.A ->`). */
     private caseLabels(c: Node): string[] {
-        const label =
-            c.childForFieldName('pattern')?.text ??
-            (c.type === 'match_arm' ? undefined : c.childForFieldName('value')?.text) ??
-            (c.namedChildren.find(x => x && /switch_label|case_switch_label|when_condition|switch_pattern|pattern|expression_list/.test(x.type)) ?? null)?.text ??
-            c.text.split(/:|->|=>|\bthen\b|\n/)[0];
-        return label
-            .replace(/^\s*(case|when)\b/, '')
-            .split(/\s*[,|]\s*/)
+        // Several labels can share one body (`case A: case B:` in C#/Java, `when :a, :b`).
+        const labelNodes = c.namedChildren.filter((x): x is Node => !!x && /^(switch_label|case_switch_label|when_condition|switch_pattern|pattern)$/.test(x.type));
+        const texts =
+            labelNodes.length > 0
+                ? labelNodes.map(x => x.text)
+                : [c.childForFieldName('pattern')?.text ?? (c.type === 'match_arm' ? undefined : c.childForFieldName('value')?.text) ?? (c.namedChildren.find(x => x && x.type === 'expression_list') ?? null)?.text ?? c.text.split(/:(?!:)|->|=>|\bthen\b|\n/)[0]];
+        if (c.type === 'match_arm' || c.childForFieldName('pattern')) {
+            const pattern = c.childForFieldName('pattern')?.text;
+            if (pattern && labelNodes.length === 0) texts.splice(0, texts.length, pattern);
+        }
+        return texts
+            .flatMap(label =>
+                label
+                    .replace(/^\s*(case|when)\b/, '')
+                    .replace(/\s*(:(?!:)|->|=>)\s*$/, '')
+                    .split(/\s*[,|]\s*/)
+            )
             .map(t => t.trim())
             .filter(Boolean);
     }

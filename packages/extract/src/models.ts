@@ -35,8 +35,25 @@ export interface Finding {
     counterexample?: CounterexampleStep[];
     /** How the finding was established. */
     source: 'analysis' | 'nuxmv' | 'graph' | 'llm';
-    /** An LLM-proposed patch and whether re-running the checks confirmed it. */
-    suggestedPatch?: { diff: string; verified: boolean; note: string };
+    /** A proposed code change (quick fix or LLM) and whether re-running every check confirmed it. */
+    suggestedPatch?: SuggestedPatch;
+}
+
+/** One file of a proposed change, whole, before and after. */
+export interface PatchFile {
+    file: string;
+    before: string;
+    after: string;
+}
+
+export interface SuggestedPatch {
+    /** Unified diff of all files. */
+    diff: string;
+    files?: PatchFile[];
+    verified: boolean;
+    note: string;
+    /** `quick fix` or the LLM provider that proposed it. */
+    by?: string;
 }
 
 export interface Evidence {

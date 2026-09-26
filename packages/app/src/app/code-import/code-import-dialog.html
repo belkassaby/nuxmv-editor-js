@@ -37,7 +37,56 @@
           <p class="muted small">Not available: this server is not running on this machine (or PROVENFLOW_EXTRACT_PATHS=0). From a terminal: <code>npx pflow extract &lt;folder&gt;</code>.</p>
         }
       </section>
+      <section class="code-source">
+        <h3>Code changes</h3>
+        <label class="code-option"><input type="checkbox" [checked]="codeImport.quickFixes()" (change)="codeImport.quickFixes.set($any($event.target).checked)" /> Propose quick fixes (mechanical changes, each verified by re-running every check)</label>
+        <label class="code-option">
+          Also ask an LLM:
+          <select (change)="codeImport.llm.set($any($event.target).value)" aria-label="LLM">
+            <option value="" [selected]="!codeImport.llm()">no</option>
+            @if (codeImport.llmProviders().anthropic) { <option value="anthropic:claude-sonnet-5" [selected]="codeImport.llm() === 'anthropic:claude-sonnet-5'">Anthropic (claude-sonnet-5)</option> }
+            @if (codeImport.llmProviders().openai) { <option value="openai:gpt-4.1" [selected]="codeImport.llm() === 'openai:gpt-4.1'">OpenAI-compatible (gpt-4.1)</option> }
+            <option value="ollama:qwen2.5-coder" [selected]="codeImport.llm() === 'ollama:qwen2.5-coder'">Ollama, local (qwen2.5-coder)</option>
+          </select>
+          @if (codeImport.llm()) {
+            <input class="mono narrow-text" type="text" [value]="codeImport.llm()" (change)="codeImport.llm.set($any($event.target).value)" aria-label="Provider and model" spellcheck="false" />
+            for up to <input class="narrow" type="number" min="1" max="20" [value]="codeImport.llmFixes()" (change)="codeImport.llmFixes.set(+$any($event.target).value)" aria-label="Number of findings" /> findings
+          }
+        </label>
+        <p class="muted small">API keys stay on the server (ANTHROPIC_API_KEY, OPENAI_API_KEY / OPENAI_BASE_URL, OLLAMA_HOST). Every proposed change, from a quick fix or an LLM, is applied in memory and checked again before it is marked verified; nothing is written until you apply it.</p>
+      </section>
       @if (codeImport.error(); as e) { <p class="error-text">{{ e }}</p> }
+    </div>
+  } @else if (view() === 'change' && reviewing(); as f) {
+    <div class="code-review">
+      <div class="code-review-head">
+        <button type="button" (click)="closeReview()">← Back</button>
+        <strong>{{ f.rule }}</strong>
+        <span class="muted">{{ f.subject }}</span>
+        <span class="badge" [class.ok]="f.suggestedPatch!.verified" [class.warn]="!f.suggestedPatch!.verified">{{ f.suggestedPatch!.verified ? '✓ verified' : '✗ not verified' }}</span>
+        <span class="muted small">{{ f.suggestedPatch!.by ?? 'LLM' }}</span>
+      </div>
+      <p class="small">{{ f.message }}</p>
+      <p class="small"><strong>Change:</strong> {{ f.suggestedPatch!.note }}</p>
+      @if ((f.suggestedPatch!.files ?? []).length > 1) {
+        <nav class="help-tabs" role="tablist">
+          @for (pf of f.suggestedPatch!.files; track pf.file; let i = $index) {
+            <button type="button" role="tab" [class.active]="fileIndex() === i" (click)="fileIndex.set(i)">{{ pf.file }}</button>
+          }
+        </nav>
+      }
+      @if (f.suggestedPatch!.files?.[fileIndex()]; as pf) {
+        <p class="mono small code-review-file">{{ pf.file }} @if (codeImport.applied().has(pf.file)) { <span class="badge ok">applied</span> }</p>
+        <app-code-diff [before]="pf.before" [after]="pf.after" />
+        <div class="code-review-actions">
+          <button type="button" class="primary" (click)="applyChange()" [disabled]="!report()?.applicable || codeImport.applied().has(pf.file)" [title]="report()?.applicable ? 'Write the proposed text (with your edits) to ' + pf.file : 'Only folders analysed by path on a local server can be changed: download the file instead'">Apply to {{ pf.file.split('/').pop() }}</button>
+          <button type="button" (click)="downloadChange()">Download file</button>
+          <button type="button" (click)="copyChange()">Copy</button>
+          @if (report()?.applicable && codeImport.applied().size > 0) { <button type="button" (click)="rerun()">Run the analysis again</button> }
+          <span class="spacer"></span>
+          @if (applyMessage(); as m) { <span class="small" [class.ok-text]="m.ok" [class.error-text]="!m.ok">{{ m.text }}</span> }
+        </div>
+      }
     </div>
   } @else {
     @let r = report()!;
@@ -52,6 +101,7 @@
     </div>
     <nav class="help-tabs code-tabs" role="tablist">
       <button type="button" role="tab" [class.active]="view() === 'findings'" (click)="view.set('findings')">Findings</button>
+      <button type="button" role="tab" [class.active]="view() === 'changes'" (click)="view.set('changes')">Code changes ({{ changes().length }})</button>
       <button type="button" role="tab" [class.active]="view() === 'models'" (click)="view.set('models')">Models ({{ r.models.length }})</button>
       <button type="button" role="tab" [class.active]="view() === 'patterns'" (click)="view.set('patterns')">Patterns ({{ r.patterns.length }})</button>
       <button type="button" role="tab" [class.active]="view() === 'paradigm'" (click)="view.set('paradigm')">Paradigm</button>
@@ -75,6 +125,9 @@
                     <span class="muted">{{ f.subject }}</span>
                     @if (f.loc) { <code class="small">{{ where(f.loc) }}</code> }
                     <span class="spacer"></span>
+                    @if (f.suggestedPatch?.files?.length) {
+                      <button type="button" class="small" (click)="review(f)" [title]="f.suggestedPatch!.note">Review change <span class="badge" [class.ok]="f.suggestedPatch!.verified" [class.warn]="!f.suggestedPatch!.verified">{{ f.suggestedPatch!.verified ? '✓' : '✗' }}</span></button>
+                    }
                     @if (modelOf(f.model); as m) {
                       <button type="button" class="small" (click)="show(m, true)" [title]="f.source === 'nuxmv' ? 'Open the model and check it: the counterexample replays on the diagram' : 'Open the model'">Open model</button>
                     }
@@ -103,6 +156,26 @@
             <ul class="small muted">
               @for (n of r.notes; track $index) { <li>{{ n }}</li> }
             </ul>
+          }
+        }
+        @case ('changes') {
+          @if (changes().length === 0) {
+            <p class="muted">No code change proposed. Quick fixes cover missing switch cases, writes after an await without a re-check, and resources acquired twice or never released; enable an LLM on the first screen for the others.</p>
+          } @else {
+            <table class="code-table">
+              <thead><tr><th>finding</th><th>files</th><th>by</th><th>verified</th><th></th></tr></thead>
+              <tbody>
+                @for (f of changes(); track $index) {
+                  <tr>
+                    <td><strong>{{ f.rule }}</strong> {{ f.subject }}<br /><code class="small muted">{{ where(f.loc) }}</code></td>
+                    <td class="small">@for (pf of f.suggestedPatch!.files; track pf.file) { <span class="mono">{{ pf.file }}</span> @if (codeImport.applied().has(pf.file)) { <span class="badge ok">applied</span> } <br /> }</td>
+                    <td class="small">{{ f.suggestedPatch!.by ?? 'LLM' }}</td>
+                    <td><span class="badge" [class.ok]="f.suggestedPatch!.verified" [class.warn]="!f.suggestedPatch!.verified">{{ f.suggestedPatch!.verified ? '✓ verified' : '✗ not verified' }}</span></td>
+                    <td><button type="button" class="small" (click)="review(f)">Review</button></td>
+                  </tr>
+                }
+              </tbody>
+            </table>
           }
         }
         @case ('models') {

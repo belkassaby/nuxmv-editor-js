@@ -259,3 +259,22 @@ dialog.code-import header h2 { flex: 1; }
 .doc-new { border: 0; background: none; padding: 0 10px; font-size: 16px; color: var(--muted); }
 .doc-new:hover { color: var(--text); background: var(--hover); }
 .doc-report { align-self: center; border: 1px solid var(--border); border-radius: 999px; padding: 2px 10px; font-size: 12px; background: var(--bg); white-space: nowrap; max-width: 320px; overflow: hidden; text-overflow: ellipsis; }
+
+/* Code changes: side-by-side review */
+.code-option { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 6px 0; font-size: 13px; }
+.narrow-text { width: 220px; }
+.code-review { padding: 10px 16px 16px; display: flex; flex-direction: column; gap: 6px; }
+.code-review p { margin: 2px 0; }
+.code-review-head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.code-review-file { margin-top: 6px; }
+.code-review-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 6px; }
+.code-diff-heads { display: grid; grid-template-columns: 1fr 1fr; font-size: 12px; font-weight: 600; color: var(--muted); padding: 0 4px; }
+.code-diff { border: 1px solid var(--border); border-radius: 6px; height: min(56vh, 560px); overflow: auto; font-family: var(--mono, ui-monospace, monospace); font-size: 12.5px; background: var(--bg); }
+.code-diff .cm-mergeView { height: 100%; }
+.code-diff .cm-mergeViewEditors { min-height: 100%; }
+.code-diff .cm-editor { height: auto; }
+.code-diff .cm-changedLine { background: rgb(46 160 67 / 12%); }
+.code-diff .cm-merge-a .cm-changedLine, .code-diff .cm-deletedChunk { background: rgb(248 81 73 / 12%); }
+.code-diff .cm-merge-a .cm-changedText { background: rgb(248 81 73 / 30%); }
+.code-diff .cm-merge-b .cm-changedText { background: rgb(46 160 67 / 30%); }
+.code-diff .cm-collapsedLines { color: var(--muted); background: var(--hover); }

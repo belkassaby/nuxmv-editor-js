@@ -18,6 +18,22 @@ export interface CodeFinding {
     spec?: string;
     counterexample?: Array<{ state: string; event?: string; loc?: CodeLocation }>;
     source: 'analysis' | 'nuxmv' | 'graph' | 'llm';
+    suggestedPatch?: SuggestedChange;
+}
+
+/** A proposed code change: every changed file whole, before and after. */
+export interface SuggestedChange {
+    diff: string;
+    files?: Array<{ file: string; before: string; after: string }>;
+    verified: boolean;
+    note: string;
+    by?: string;
+}
+
+export interface LlmProviders {
+    anthropic: boolean;
+    openai: boolean;
+    ollama: boolean;
 }
 
 export interface CodeModel {
@@ -35,6 +51,8 @@ export interface CodeModel {
 
 export interface CodeReport {
     root: string;
+    /** The server can write reviewed changes into this folder (analysed by path on a local server). */
+    applicable?: boolean;
     files: number;
     checkedWith: 'nuxmv' | 'explicit';
     summary: { error: number; warning: number; info: number };
@@ -65,18 +83,47 @@ export class CodeImport {
     readonly report = signal<CodeReport | null>(loadReport());
     /** The server can read a folder by path (it runs on this machine). */
     readonly pathsAllowed = signal(false);
+    /** LLM providers configured on the server (their keys stay there). */
+    readonly llmProviders = signal<LlmProviders>({ anthropic: false, openai: false, ollama: false });
+    /** Propose deterministic quick fixes, each verified by re-running the checks. */
+    readonly quickFixes = signal(true);
+    /** `anthropic:<model>`, `openai:<model>`, `ollama:<model>`, or '' for no LLM. */
+    readonly llm = signal('');
+    readonly llmFixes = signal(5);
+    /** Changes written to disk in this session: `file`. */
+    readonly applied = signal<ReadonlySet<string>>(new Set());
 
     async refresh(): Promise<void> {
         try {
-            const health = (await (await fetch('api/health')).json()) as { extract?: { paths?: boolean } };
+            const health = (await (await fetch('api/health')).json()) as { extract?: { paths?: boolean; llm?: LlmProviders } };
             this.pathsAllowed.set(!!health.extract?.paths);
+            if (health.extract?.llm) this.llmProviders.set(health.extract.llm);
         } catch {
             this.pathsAllowed.set(false);
         }
     }
 
     analysePath(path: string): Promise<void> {
-        return this.run(`Analysing ${path}…`, { path: path.trim() });
+        return this.run(`Analysing ${path}…`, { path: path.trim(), ...this.fixOptions() });
+    }
+
+    private fixOptions(): Record<string, unknown> {
+        return { quickFixes: this.quickFixes() ? 20 : 0, ...(this.llm().trim() ? { llm: this.llm().trim(), llmFixes: this.llmFixes() } : {}) };
+    }
+
+    /** Writes a reviewed change into the analysed folder (the server refuses if the file changed meanwhile). */
+    async apply(file: string, before: string, after: string): Promise<string | null> {
+        const r = this.report();
+        if (!r?.applicable) return 'Only folders analysed by path on a local server can be changed: download the file instead.';
+        try {
+            const res = await fetch('api/apply', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ root: r.root, file, before, after }) });
+            const json = (await res.json()) as { error?: string };
+            if (!res.ok) return json.error ?? `HTTP ${res.status}`;
+            this.applied.update(set => new Set([...set, file]));
+            return null;
+        } catch (error) {
+            return (error as Error).message;
+        }
     }
 
     /** Uploads the relevant files of a folder picked in the browser (webkitdirectory). */
@@ -101,7 +148,7 @@ export class CodeImport {
             return;
         }
         const folder = files[0].webkitRelativePath.split('/')[0] || 'folder';
-        return this.run(`Uploading and analysing ${count} files of ${folder}${skipped ? ` (${skipped} skipped: too large or too many)` : ''}…`, { files: picked }, folder);
+        return this.run(`Uploading and analysing ${count} files of ${folder}${skipped ? ` (${skipped} skipped: too large or too many)` : ''}…`, { files: picked, ...this.fixOptions() }, folder);
     }
 
     private async run(progress: string, body: unknown, name?: string): Promise<void> {
@@ -114,6 +161,7 @@ export class CodeImport {
             if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
             const report = name ? { ...json, root: name } : json;
             this.report.set(report);
+            this.applied.set(new Set());
             saveReport(report);
         } catch (error) {
             this.error.set(`The analysis failed: ${(error as Error).message}`);

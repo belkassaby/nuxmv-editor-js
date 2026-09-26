@@ -12,6 +12,7 @@ import { loadConfig, type ProvenflowConfig } from './config.js';
 import { mergeFacts, type Facts } from './ir.js';
 import { analyseArchitecture, type ArchitectureResult } from './architecture.js';
 import { buildLifecycles } from './lifecycles.js';
+import { quickFixes, readSafe, verifyProposals } from './fixes.js';
 import { cachedProvider, resolveDynamicWrites, suggestFixes, suggestProperties, type LlmLog, type LlmProvider } from './llm.js';
 import { buildStateMachines } from './machines.js';
 import type { ExtractedModel, Finding } from './models.js';
@@ -27,6 +28,7 @@ export * from './config.js';
 export * from './ir.js';
 export * from './models.js';
 export * from './llm.js';
+export { lineDiff, quickFixes, verifyProposals, type Proposal } from './fixes.js';
 export * from './report.js';
 export { listSourceFiles } from './scan.js';
 export { LANGUAGES } from './treesitter/frontend.js';
@@ -43,6 +45,8 @@ export interface ExtractOptions {
     llm?: LlmProvider;
     /** Ask the LLM for fixes of the first N warnings/errors (0: none). */
     llmFixes?: number;
+    /** Propose deterministic quick fixes (verified by re-running the checks) for up to N findings (0: none). */
+    quickFixes?: number;
     /** Where LLM answers are cached (default: <root>/.provenflow/cache). */
     cacheDir?: string;
     /** Files whose text replaces the file on disk (used to check fixes). */
@@ -61,6 +65,8 @@ export interface ExtractionResult {
     paradigm: ParadigmProfile[];
     architecture: Pick<ArchitectureResult, 'edges'>;
     llm?: LlmLog & { provider: string };
+    /** Quick fixes proposed and whether each was verified. */
+    quickFixes?: LlmLog;
     /** Notes about the run (skipped files, nuXmv errors). */
     notes: string[];
     checkedWith: 'nuxmv' | 'explicit';
@@ -77,6 +83,7 @@ export async function extractProject(root: string, options: ExtractOptions = {})
     );
 
     const llmLog: LlmLog = { accepted: [], rejected: [] };
+    const fixLog: LlmLog = { accepted: [], rejected: [] };
     const record = (log: LlmLog) => {
         llmLog.accepted.push(...log.accepted);
         llmLog.rejected.push(...log.rejected);
@@ -114,9 +121,17 @@ export async function extractProject(root: string, options: ExtractOptions = {})
     ]);
     findings = applyIgnores(findings, config).sort(bySeverity);
 
+    const rerun = async (overrides: Map<string, string>) =>
+        (await extractProject(root, { config, checker: options.checker, overrides: new Map([...(options.overrides ?? []), ...overrides]) })).findings;
+    const read = (file: string) => options.overrides?.get(file) ?? readSafe(join(root, file));
+    if ((options.quickFixes ?? 0) > 0) {
+        const proposals = quickFixes(findings, facts, models, read).slice(0, options.quickFixes);
+        const fixed = await verifyProposals(findings, proposals, root, rerun, read);
+        fixLog.accepted.push(...fixed.accepted);
+        fixLog.rejected.push(...fixed.rejected);
+        findings = fixed.findings;
+    }
     if (llm && (options.llmFixes ?? 0) > 0) {
-        const rerun = async (overrides: Map<string, string>) =>
-            (await extractProject(root, { config, checker: options.checker, overrides: new Map([...(options.overrides ?? []), ...overrides]) })).findings;
         const fixed = await suggestFixes(findings, root, llm, rerun, options.llmFixes);
         record(fixed.log);
         findings = fixed.findings;
@@ -134,6 +149,7 @@ export async function extractProject(root: string, options: ExtractOptions = {})
         paradigm: paradigm.profiles,
         architecture: { edges: architecture.edges },
         llm: llm ? { provider: llm.name, ...llmLog } : undefined,
+        quickFixes: (options.quickFixes ?? 0) > 0 ? fixLog : undefined,
         notes: [...facts.notes, ...verification.errors, ...uncheckedNote(verification.verdicts)],
         checkedWith: options.checker && verification.errors.length < models.length ? 'nuxmv' : 'explicit'
     };

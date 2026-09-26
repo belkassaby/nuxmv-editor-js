@@ -5,7 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { EXAMPLES, generatePython, generateSmv, matchResults, parseDiagram } from '@provenflow/language';
 import { runNurv } from '../src/nurv-runner.js';
 import { spawn, spawnSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createApp } from '../src/app.js';
@@ -261,7 +261,7 @@ describe('POST /api/extract (code base models)', () => {
 
     it('analyses a folder of the server by path, with the models as .pflow text', async () => {
         const url = await start(true);
-        expect((await (await fetch(`${url}/api/health`)).json()).extract).toEqual({ paths: true });
+        expect((await (await fetch(`${url}/api/health`)).json()).extract).toMatchObject({ paths: true, apply: true });
         const res = await extract(url, { path: SHOP });
         expect(res.status).toBe(200);
         const body = await res.json();
@@ -287,5 +287,57 @@ describe('POST /api/extract (code base models)', () => {
         expect((await extract(url, { path: SHOP })).status).toBe(403);
         expect((await extract(url, { files: { '../escape.ts': 'x' } })).status).toBe(400);
         expect((await extract(url, {})).status).toBe(400);
+    });
+});
+
+describe('code changes: proposed, verified, applied', () => {
+    const SHOP = fileURLToPath(new URL('../../extract/test/fixtures/shop', import.meta.url));
+    const runner: RunnerConfig = { executable: '/nonexistent/nuXmv', timeoutMs: 10_000, maxOutputBytes: 1_000_000 };
+    let server: Server;
+    let url: string;
+    let copy: string;
+    beforeAll(async () => {
+        copy = mkdtempSync(join(tmpdir(), 'provenflow-apply-'));
+        cpSync(SHOP, copy, { recursive: true });
+        await new Promise<void>(resolve => {
+            server = createApp({ runner, allowLocalPaths: true }).listen(0, '127.0.0.1', () => {
+                url = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+                resolve();
+            });
+        });
+    });
+    afterAll(() => {
+        server.close();
+        rmSync(copy, { recursive: true, force: true });
+    });
+    const post = (path: string, body: unknown) => fetch(`${url}${path}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+
+    it('proposes verified quick fixes with the whole files, and applies a reviewed one', async () => {
+        const report = await (await post('/api/extract', { path: copy })).json();
+        expect(report.applicable).toBe(true);
+        const stale = report.findings.find((f: { rule: string }) => f.rule === 'stale-write-after-await');
+        expect(stale.suggestedPatch.verified).toBe(true);
+        const file = stale.suggestedPatch.files[0];
+        expect(file.file).toBe('src/core/order.ts');
+        expect(file.after).toContain("if (this.status !== 'submitted') return;");
+
+        const applied = await post('/api/apply', { root: report.root, file: file.file, before: file.before, after: file.after });
+        expect(applied.status).toBe(200);
+        expect(readFileSync(join(copy, 'src/core/order.ts'), 'utf8')).toBe(file.after);
+        // The file changed since the analysis: a second apply of the old version is refused.
+        expect((await post('/api/apply', { root: report.root, file: file.file, before: file.before, after: file.after })).status).toBe(409);
+
+        const again = await (await post('/api/extract', { path: copy, quickFixes: 0 })).json();
+        expect(again.findings.some((f: { rule: string }) => f.rule === 'stale-write-after-await')).toBe(false);
+    });
+
+    it('refuses to write outside an analysed folder', async () => {
+        expect((await post('/api/apply', { root: tmpdir(), file: 'x.ts', before: '', after: 'x' })).status).toBe(403);
+        const report = await (await post('/api/extract', { path: copy, quickFixes: 0 })).json();
+        expect((await post('/api/apply', { root: report.root, file: '../escape.ts', before: '', after: 'x' })).status).toBe(400);
+    });
+
+    it('rejects an unknown LLM provider', async () => {
+        expect((await post('/api/extract', { path: copy, llm: 'nope:x' })).status).toBe(400);
     });
 });
